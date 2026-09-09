@@ -10,13 +10,13 @@ WORKDIR /go/src
 RUN go install github.com/swaggo/swag/cmd/swag@latest
 
 # Copy go.mod and go.sum
-COPY go.* ./
+COPY sms-gateway-server/go.* ./
 
 # Downloads all the dependencies in advance (could be left out, but it's more clear this way)
 RUN go mod download
 
 # Copy all the Code and stuff to compile everything
-COPY . .
+COPY sms-gateway-server/ .
 
 # Replace {APP_VERSION} with the actual version
 RUN sed -i "s/{APP_VERSION}/${APP_VERSION}/g" ./cmd/${APP}/main.go
@@ -35,7 +35,7 @@ WORKDIR /app
 
 RUN apk add --no-cache tzdata
 
-COPY scripts/docker-entrypoint.sh /docker-entrypoint.sh
+COPY sms-gateway-server/scripts/docker-entrypoint.sh /docker-entrypoint.sh
 
 COPY --from=build /go/src/app /app
 
