@@ -1,0 +1,174 @@
+package config
+
+import "time"
+
+type GatewayMode string
+
+const (
+	GatewayModePublic  GatewayMode = "public"
+	GatewayModePrivate GatewayMode = "private"
+
+	DefaultUpstreamURL = "https://api.sms-gate.app/upstream/v1"
+)
+
+type Config struct {
+	Gateway  Gateway   `yaml:"gateway"`  // gateway config
+	HTTP     HTTP      `yaml:"http"`     // http server config
+	Database Database  `yaml:"database"` // database config
+	FCM      FCMConfig `yaml:"fcm"`      // firebase cloud messaging config
+	SSE      SSE       `yaml:"sse"`      // server-sent events config
+	Messages Messages  `yaml:"messages"` // messages config
+	Cache    Cache     `yaml:"cache"`    // cache (memory or redis) config
+	PubSub   PubSub    `yaml:"pubsub"`   // pubsub (memory or redis) config
+	JWT      JWT       `yaml:"jwt"`      // jwt config
+	OTP      OTP       `yaml:"otp"`      // one-time password config
+}
+
+type Gateway struct {
+	Mode         GatewayMode `yaml:"mode"          envconfig:"GATEWAY__MODE"`          // gateway mode: public or private
+	PrivateToken string      `yaml:"private_token" envconfig:"GATEWAY__PRIVATE_TOKEN"` // device registration token in private mode
+	UpstreamURL  string      `yaml:"upstream_url"  envconfig:"GATEWAY__UPSTREAM_URL"`  // upstream server URL for private-mode push notifications
+}
+
+type HTTP struct {
+	Listen  string   `yaml:"listen"  envconfig:"HTTP__LISTEN"`  // listen address
+	Proxies []string `yaml:"proxies" envconfig:"HTTP__PROXIES"` // proxies
+
+	API     API     `yaml:"api"`
+	OpenAPI OpenAPI `yaml:"openapi"`
+}
+
+type API struct {
+	Host string `yaml:"host" envconfig:"HTTP__API__HOST"` // public API host
+	Path string `yaml:"path" envconfig:"HTTP__API__PATH"` // public API path
+}
+
+type OpenAPI struct {
+	Enabled bool `yaml:"enabled" envconfig:"HTTP__OPENAPI__ENABLED"` // openapi enabled
+}
+
+type Database struct {
+	Host     string `yaml:"host"     envconfig:"DATABASE__HOST"`     // database host
+	Port     int    `yaml:"port"     envconfig:"DATABASE__PORT"`     // database port
+	User     string `yaml:"user"     envconfig:"DATABASE__USER"`     // database user
+	Password string `yaml:"password" envconfig:"DATABASE__PASSWORD"` // database password
+	Database string `yaml:"database" envconfig:"DATABASE__DATABASE"` // database name
+	Timezone string `yaml:"timezone" envconfig:"DATABASE__TIMEZONE"` // database timezone
+	Debug    bool   `yaml:"debug"    envconfig:"DATABASE__DEBUG"`    // debug mode
+
+	MaxOpenConns int `yaml:"max_open_conns" envconfig:"DATABASE__MAX_OPEN_CONNS"` // max open connections
+	MaxIdleConns int `yaml:"max_idle_conns" envconfig:"DATABASE__MAX_IDLE_CONNS"` // max idle connections
+}
+
+type FCMConfig struct {
+	CredentialsJSON string `yaml:"credentials_json" envconfig:"FCM__CREDENTIALS_JSON"` // firebase credentials json (public mode only)
+	DebounceSeconds uint16 `yaml:"debounce_seconds" envconfig:"FCM__DEBOUNCE_SECONDS"` // push notification debounce (>= 5s)
+	TimeoutSeconds  uint16 `yaml:"timeout_seconds"  envconfig:"FCM__TIMEOUT_SECONDS"`  // push notification send timeout
+}
+
+type HashingTask struct {
+	IntervalSeconds uint16 `yaml:"interval_seconds" envconfig:"TASKS__HASHING__INTERVAL_SECONDS"` // deprecated
+}
+
+type SSE struct {
+	KeepAlivePeriodSeconds uint16 `yaml:"keep_alive_period_seconds" envconfig:"SSE__KEEP_ALIVE_PERIOD_SECONDS"` // keep alive period in seconds, 0 for no keep alive
+}
+
+type Messages struct {
+	CacheTTLSeconds        uint16              `yaml:"cache_ttl_seconds"        envconfig:"MESSAGES__CACHE_TTL_SECONDS"`
+	HashingIntervalSeconds uint16              `yaml:"hashing_interval_seconds" envconfig:"MESSAGES__HASHING_INTERVAL_SECONDS"`
+	Queue                  messagesQueueConfig `yaml:"queue"`
+}
+
+type messagesQueueConfig struct {
+	MaxPending    int      `yaml:"max_pending"     envconfig:"MESSAGES__QUEUE__MAX_PENDING"`
+	MaxPendingAge Duration `yaml:"max_pending_age" envconfig:"MESSAGES__QUEUE__MAX_PENDING_AGE"`
+	MaxFailed     int      `yaml:"max_failed"      envconfig:"MESSAGES__QUEUE__MAX_FAILED"`
+	MaxFailedAge  Duration `yaml:"max_failed_age"  envconfig:"MESSAGES__QUEUE__MAX_FAILED_AGE"`
+
+	StatsRefreshInterval Duration `yaml:"stats_refresh_interval" envconfig:"MESSAGES__QUEUE__STATS_REFRESH_INTERVAL"`
+	StatsCacheTTL        Duration `yaml:"stats_cache_ttl"        envconfig:"MESSAGES__QUEUE__STATS_CACHE_TTL"`
+}
+
+type Cache struct {
+	URL string `yaml:"url" envconfig:"CACHE__URL"`
+}
+
+type PubSub struct {
+	URL        string `yaml:"url"         envconfig:"PUBSUB__URL"`
+	BufferSize uint   `yaml:"buffer_size" envconfig:"PUBSUB__BUFFER_SIZE"`
+}
+
+type JWT struct {
+	Secret     string   `yaml:"secret"      envconfig:"JWT__SECRET"`
+	AccessTTL  Duration `yaml:"access_ttl"  envconfig:"JWT__ACCESS_TTL"`
+	RefreshTTL Duration `yaml:"refresh_ttl" envconfig:"JWT__REFRESH_TTL"`
+	Issuer     string   `yaml:"issuer"      envconfig:"JWT__ISSUER"`
+
+	TTL Duration `yaml:"ttl" envconfig:"JWT__TTL"` // deprecated, remove after 2027-03-01
+}
+
+type OTP struct {
+	Enabled bool   `yaml:"enabled" envconfig:"OTP__ENABLED"` // enable one-time code authentication for device registration
+	Length  uint8  `yaml:"length"  envconfig:"OTP__LENGTH"`  // OTP code length (min 6)
+	TTL     uint16 `yaml:"ttl"     envconfig:"OTP__TTL"`     // otp ttl in seconds
+	Retries uint8  `yaml:"retries" envconfig:"OTP__RETRIES"` // otp generation retries (collision handling)
+}
+
+func Default() Config {
+	//nolint:exhaustruct,mnd,goconst // default values
+	return Config{
+		Gateway: Gateway{
+			Mode:        GatewayModePublic,
+			UpstreamURL: DefaultUpstreamURL,
+		},
+		HTTP: HTTP{
+			Listen: ":3000",
+		},
+		Database: Database{
+			Host:     "localhost",
+			Port:     3306,
+			User:     "sms",
+			Password: "sms",
+			Database: "sms",
+			Timezone: "UTC",
+		},
+		FCM: FCMConfig{
+			CredentialsJSON: "",
+		},
+		SSE: SSE{
+			KeepAlivePeriodSeconds: 15,
+		},
+		Messages: Messages{
+			CacheTTLSeconds:        300, // 5 minutes
+			HashingIntervalSeconds: 60,
+			Queue: messagesQueueConfig{
+				MaxPending:    0,
+				MaxPendingAge: 0,
+				MaxFailed:     0,
+				MaxFailedAge:  0,
+
+				StatsRefreshInterval: Duration(time.Second * 5),
+				StatsCacheTTL:        Duration(time.Second * 60),
+			},
+		},
+		Cache: Cache{
+			URL: "memory://",
+		},
+		PubSub: PubSub{
+			URL:        "memory://",
+			BufferSize: 128,
+		},
+		JWT: JWT{
+			AccessTTL:  Duration(time.Minute * 15),
+			RefreshTTL: Duration(time.Hour * 24 * 30),
+			Issuer:     "sms-gate.app",
+		},
+		OTP: OTP{
+			Enabled: true,
+			Length:  6,
+			TTL:     60,
+			Retries: 3,
+		},
+	}
+}

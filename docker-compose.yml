@@ -1,0 +1,83 @@
+name: ethio-sms-platform
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - call
+      - sms-gateway-backend
+
+  call:
+    build: ./call
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - call_data:/app/data
+    expose:
+      - "5000"
+
+  sms-gateway-backend:
+    build:
+      context: ./sms-gateway-server
+      dockerfile: ./build/package/Dockerfile
+      args:
+        - APP=sms-gateway
+    restart: unless-stopped
+    volumes:
+      - ./sms-gateway-server/configs/config.yml:/app/config.yml:ro
+    environment:
+      - CONFIG_PATH=config.yml
+    expose:
+      - "3000"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  sms-gateway-worker:
+    build:
+      context: ./sms-gateway-server
+      dockerfile: ./build/package/Dockerfile
+      args:
+        - APP=sms-gateway
+    command: ["/app/app", "worker"]
+    restart: unless-stopped
+    volumes:
+      - ./sms-gateway-server/configs/config.yml:/app/config.yml:ro
+    environment:
+      - CONFIG_PATH=config.yml
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  mariadb:
+    image: mariadb:lts
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=sms
+      - MYSQL_USER=sms
+      - MYSQL_PASSWORD=sms
+      - MARIADB_AUTO_UPGRADE=1
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  caddy_data:
+  caddy_config:
+  call_data:
+  mariadb_data:

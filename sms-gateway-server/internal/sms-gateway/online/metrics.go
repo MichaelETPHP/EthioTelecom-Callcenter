@@ -1,0 +1,128 @@
+package online
+
+import (
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+// Metric constants.
+const (
+	metricsNamespace = "sms"
+	metricsSubsystem = "online"
+
+	metricStatusSetTotal     = "status_set_total"
+	metricCacheOperations    = "cache_operations_total"
+	metricCacheLatency       = "cache_latency_seconds"
+	metricPersistenceLatency = "persistence_latency_seconds"
+	metricPersistenceErrors  = "persistence_errors_total"
+	metricBatchSize          = "batch_size"
+
+	labelOperation = "operation"
+	labelStatus    = "status"
+
+	operationSet   = "set"
+	operationDrain = "drain"
+
+	statusSuccess = "success"
+	statusError   = "error"
+)
+
+// metrics contains all Prometheus metrics for the online module.
+type metrics struct {
+	statusSetCounter   *prometheus.CounterVec
+	cacheOperations    *prometheus.CounterVec
+	cacheLatency       prometheus.Histogram
+	persistenceLatency prometheus.Histogram
+	persistenceErrors  prometheus.Counter
+	batchSize          prometheus.Gauge
+}
+
+// newMetrics creates and initializes all online metrics.
+func newMetrics() *metrics {
+	var memBuckets = []float64{1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, .001, .005, .01, .05, .1}
+	var dbBuckets = []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10}
+
+	return &metrics{
+		statusSetCounter: promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: metricsNamespace,
+			Subsystem: metricsSubsystem,
+			Name:      metricStatusSetTotal,
+			Help:      "Total number of online status updates",
+		}, []string{labelStatus}),
+
+		cacheOperations: promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: metricsNamespace,
+			Subsystem: metricsSubsystem,
+			Name:      metricCacheOperations,
+			Help:      "Total cache operations by type",
+		}, []string{labelOperation, labelStatus}),
+
+		cacheLatency: promauto.NewHistogram(prometheus.HistogramOpts{
+			Namespace: metricsNamespace,
+			Subsystem: metricsSubsystem,
+			Name:      metricCacheLatency,
+			Help:      "Cache operation latency in seconds",
+			Buckets:   memBuckets,
+		}),
+
+		persistenceLatency: promauto.NewHistogram(prometheus.HistogramOpts{
+			Namespace: metricsNamespace,
+			Subsystem: metricsSubsystem,
+			Name:      metricPersistenceLatency,
+			Help:      "Persistence operation latency in seconds",
+			Buckets:   dbBuckets,
+		}),
+
+		persistenceErrors: promauto.NewCounter(prometheus.CounterOpts{
+			Namespace: metricsNamespace,
+			Subsystem: metricsSubsystem,
+			Name:      metricPersistenceErrors,
+			Help:      "Total persistence errors by type",
+		}),
+
+		batchSize: promauto.NewGauge(prometheus.GaugeOpts{
+			Namespace: metricsNamespace,
+			Subsystem: metricsSubsystem,
+			Name:      metricBatchSize,
+			Help:      "Current batch size",
+		}),
+	}
+}
+
+// IncrementStatusSet increments the status set counter.
+func (m *metrics) IncrementStatusSet(success bool) {
+	status := statusSuccess
+	if !success {
+		status = statusError
+	}
+	m.statusSetCounter.WithLabelValues(status).Inc()
+}
+
+// IncrementCacheOperation increments cache operation counter.
+func (m *metrics) IncrementCacheOperation(operation, status string) {
+	m.cacheOperations.WithLabelValues(operation, status).Inc()
+}
+
+// ObserveCacheLatency observes cache operation latency.
+func (m *metrics) ObserveCacheLatency(f func()) {
+	timer := prometheus.NewTimer(m.cacheLatency)
+	f()
+	timer.ObserveDuration()
+}
+
+// ObservePersistenceLatency observes persistence operation latency.
+func (m *metrics) ObservePersistenceLatency(f func()) {
+	timer := prometheus.NewTimer(m.persistenceLatency)
+	f()
+	timer.ObserveDuration()
+}
+
+// IncrementPersistenceError increments persistence error counter.
+func (m *metrics) IncrementPersistenceError() {
+	m.persistenceErrors.Inc()
+}
+
+// SetBatchSize sets the current batch size.
+func (m *metrics) SetBatchSize(size int) {
+	m.batchSize.Set(float64(size))
+}

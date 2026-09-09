@@ -1,0 +1,26 @@
+ethiotelecom.zmichael.click {
+	# Bare /call (no trailing slash) must redirect to /call/ first - the
+	# frontend's JS uses relative fetch("api/...") calls that only resolve
+	# correctly when the browser's current path ends in /.
+	redir /call /call/
+
+	# Strip the /call prefix before forwarding to the Flask app (which
+	# thinks it lives at /), but tell it the prefix via header so
+	# url_for()-generated links still come out as /call/... (see
+	# ProxyFix in call/app.py).
+	handle_path /call/* {
+		reverse_proxy call:5000 {
+			header_up X-Forwarded-Prefix /call
+		}
+	}
+
+	# The Go server's own HTTP__API__PATH is set to /sms-api (see
+	# sms-gateway-server/configs/config.yml), so no path rewriting is
+	# needed here - just pass everything through as-is.
+	handle /sms-api/* {
+		reverse_proxy sms-gateway-backend:3000
+	}
+
+	# Convenience: visiting the bare domain goes to the call center console.
+	redir / /call/
+}

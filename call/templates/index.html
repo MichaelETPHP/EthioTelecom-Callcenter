@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ company_name }} — Call Center</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon-64.png') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <img class="brand-mark" src="{{ url_for('static', filename='img/logo-256.png') }}" alt="{{ company_name }} logo" />
+        <div class="brand-text">
+          <strong>{{ company_name }}</strong>
+          <span>Call Center Console</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-avatar">1567</div>
+        <div class="agent-meta">
+          <div class="agent-name">Agent 1567</div>
+          <div class="agent-status" id="regStatus">
+            <span class="dot dot-gray"></span> Connecting…
+          </div>
+        </div>
+      </div>
+
+      <div class="status-toggle">
+        <button class="status-btn active" data-status="available" id="btnAvailable">Available</button>
+        <button class="status-btn" data-status="away" id="btnAway">Away</button>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-view="phone">☎ Phone</button>
+        <button class="nav-item" data-view="sms">✉ SMS</button>
+        <button class="nav-item" data-view="history">🕘 Call History</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        Server: <code>{{ company_name and '' }}<span id="serverLabel">—</span></code>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <!-- Phone view -->
+      <section class="view" id="view-phone">
+        <div class="call-stage" id="callStage">
+          <!-- Idle state -->
+          <div class="stage-idle" id="stageIdle">
+            <div class="stage-idle-icon">☎</div>
+            <h2>Ready to take calls</h2>
+            <p>Dial a number below, or wait for an incoming call.</p>
+          </div>
+
+          <!-- Incoming call state -->
+          <div class="stage-incoming hidden" id="stageIncoming">
+            <div class="pulse-ring"></div>
+            <div class="caller-avatar">📞</div>
+            <div class="caller-label">Incoming call</div>
+            <div class="caller-number" id="incomingNumber">—</div>
+            <div class="call-actions">
+              <button class="call-btn reject" id="btnReject" title="Decline">✕</button>
+              <button class="call-btn accept" id="btnAccept" title="Answer">✓</button>
+            </div>
+          </div>
+
+          <!-- Active call state -->
+          <div class="stage-active hidden" id="stageActive">
+            <div class="caller-avatar small">📞</div>
+            <div class="caller-number" id="activeNumber">—</div>
+            <div class="call-timer" id="callTimer">00:00</div>
+            <div class="call-controls">
+              <button class="ctrl-btn" id="btnMute" title="Mute">🎤 Mute</button>
+              <button class="ctrl-btn" id="btnHold" title="Hold">⏸ Hold</button>
+              <button class="ctrl-btn" id="btnKeypad" title="Keypad">⌨ Keypad</button>
+              <button class="ctrl-btn hangup" id="btnHangup" title="Hang up">☎ End</button>
+            </div>
+            <div class="dtmf-pad hidden" id="dtmfPad"></div>
+          </div>
+
+          <!-- Outgoing / ringing state -->
+          <div class="stage-outgoing hidden" id="stageOutgoing">
+            <div class="pulse-ring"></div>
+            <div class="caller-avatar">📞</div>
+            <div class="caller-label">Calling…</div>
+            <div class="caller-number" id="outgoingNumber">—</div>
+            <div class="call-actions single">
+              <button class="call-btn reject" id="btnCancelOutgoing" title="Cancel">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="dialer" id="dialer">
+          <input type="tel" id="dialInput" placeholder="Enter number or extension" autocomplete="off" />
+          <div class="dialpad">
+            <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+            <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+            <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+            <button data-key="*">*</button><button data-key="0">0</button><button data-key="#">#</button>
+          </div>
+          <div class="dialer-actions">
+            <button id="btnClear">Clear</button>
+            <button id="btnCall" class="primary">Call</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SMS view -->
+      <section class="view hidden" id="view-sms">
+        <h2>Send SMS</h2>
+
+        <div class="sms-notice">
+          <strong>Heads up:</strong> this sends through a USB GSM/SIM modem, not a
+          carrier short-code gateway. The recipient will see <strong>the SIM
+          card's own phone number</strong> as the sender — not
+          "<span id="smsSenderLabel">8840</span>". A custom sender id like that
+          requires an SMPP/aggregator connection instead.
+        </div>
+
+        <div class="sms-layout">
+          <div class="sms-compose card">
+            <label class="field-label" for="smsTo">To (local number)</label>
+            <input type="tel" id="smsTo" placeholder="e.g. 09XXXXXXXX" autocomplete="off" />
+
+            <label class="field-label" for="smsMessage">Message</label>
+            <textarea id="smsMessage" rows="4" maxlength="1000" placeholder="Type your message…"></textarea>
+            <div class="sms-counter"><span id="smsCharCount">0</span> characters</div>
+
+            <button id="btnSendSms" class="primary full-width">Send SMS</button>
+            <div class="sms-result" id="smsResult"></div>
+          </div>
+
+          <div class="sms-setup card">
+            <h3>Modem setup</h3>
+            <div class="setup-row">
+              <span class="muted">Configured port</span>
+              <code id="smsConfiguredPort">—</code>
+            </div>
+            <button id="btnScanPorts" class="ghost">Detect available ports</button>
+            <button id="btnTestPort" class="ghost">Test configured port</button>
+            <div id="smsPortsList" class="ports-list"></div>
+          </div>
+        </div>
+
+        <h3 class="sms-log-heading">Recent SMS</h3>
+        <div class="call-log-wrap">
+          <table class="call-log">
+            <thead>
+              <tr><th>To</th><th>Message</th><th>Status</th><th>When</th></tr>
+            </thead>
+            <tbody id="smsLogBody">
+              <tr><td colspan="4" class="muted">No messages sent yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- History view -->
+      <section class="view hidden" id="view-history">
+        <h2>Recent calls</h2>
+        <div class="call-log-wrap">
+          <table class="call-log">
+            <thead>
+              <tr><th>Direction</th><th>Number</th><th>Status</th><th>Duration</th><th>When</th></tr>
+            </thead>
+            <tbody id="callLogBody">
+              <tr><td colspan="5" class="muted">No calls yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <audio id="remoteAudio" autoplay></audio>
+
+  <script src="{{ url_for('static', filename='js/vendor/jssip.bundle.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+.env
+.env.example
+*.md
+*.txt
+**/calls.db
+**/__pycache__/
+**/*.pyc
+**/.claude/
+sms-gateway-server/configs/config.yml
