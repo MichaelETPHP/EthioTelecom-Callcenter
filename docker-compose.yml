@@ -21,8 +21,8 @@ services:
 
   call:
     build:
-      context: ./call
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: call/Dockerfile
     restart: unless-stopped
     env_file:
       - .env
