@@ -1,4 +1,10 @@
-ethiotelecom.zmichael.click {
+:80 {
+	# Plain HTTP, no automatic HTTPS here - Coolify's own Traefik proxy
+	# in front of this container already terminates TLS for
+	# ethiotelecom.zmichael.click and forwards decrypted HTTP here. This
+	# block matches any Host header since Traefik already decided this
+	# container is the right target before the request arrives.
+
 	# Bare /call (no trailing slash) must redirect to /call/ first - the
 	# frontend's JS uses relative fetch("api/...") calls that only resolve
 	# correctly when the browser's current path ends in /.

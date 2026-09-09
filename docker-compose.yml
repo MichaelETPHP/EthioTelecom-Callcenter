@@ -4,9 +4,13 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
+    # No host port binding and no ACME here on purpose: Coolify's own
+    # Traefik proxy owns ports 80/443 and terminates HTTPS. Assign the
+    # real domain to THIS service in Coolify's UI - it forwards plain
+    # HTTP to whatever port is exposed below, and this Caddy instance
+    # just does internal /call and /sms-api path routing behind it.
+    expose:
+      - "80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -16,7 +20,9 @@ services:
       - sms-gateway-backend
 
   call:
-    build: ./call
+    build:
+      context: ./call
+      dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
       - .env
