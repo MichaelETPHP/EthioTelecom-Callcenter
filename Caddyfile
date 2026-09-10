@@ -20,12 +20,18 @@ sms.ethiotelecom.zmichael.click:80 {
 		reverse_proxy sms-gateway-backend:3000
 	}
 
-	# Everything else (mobile/v1/*, 3rdparty/v1/*, etc.) is mounted at the
-	# literal /api prefix internally regardless of HTTP__API__PATH (see
-	# internal/sms-gateway/handlers/root.go) - so it still needs /api
-	# prepended before reaching the backend, even at this domain's root.
+	# Confirmed from sms-gateway-backend's own request logs: the real app
+	# (User-Agent me.capcom.smsgateway/1.75.0) POSTs to bare "/device" -
+	# not "/mobile/v1/device" - i.e. it talks to flat paths hung directly
+	# off this origin, with no API version segment at all. The backend's
+	# actual mobile routes are mounted at the literal /api/mobile/v1
+	# prefix internally regardless of HTTP__API__PATH (see
+	# internal/sms-gateway/handlers/root.go and mobile.go's
+	# router.Group("/mobile/v1")), so both /api AND /mobile/v1 need
+	# prepending here - this subdomain exists solely for this app's own
+	# traffic, so every one of its routes lives under that same group.
 	handle {
-		rewrite * /api{uri}
+		rewrite * /api/mobile/v1{uri}
 		reverse_proxy sms-gateway-backend:3000
 	}
 }
