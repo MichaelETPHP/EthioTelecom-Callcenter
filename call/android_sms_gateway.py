@@ -41,15 +41,25 @@ def _to_e164(to_number):
     return to_number
 
 
-def send_sms(to_number, message):
-    """Send an SMS via the private SMS Gateway server. Returns (success, detail)."""
-    if not to_number or not message:
-        raise AndroidGatewayError("A destination number and message are required")
+def send_sms(to_numbers, message):
+    """Send an SMS to one or more recipients via the private SMS Gateway
+    server, in a single request — the gateway enqueues it as one message
+    fanned out to every recipient, rather than N separate messages.
+    Returns (success, detail).
+
+    to_numbers may be a single number (str) or a list of numbers.
+    """
+    if isinstance(to_numbers, str):
+        to_numbers = [to_numbers]
+    to_numbers = [n for n in (to_numbers or []) if n]
+
+    if not to_numbers or not message:
+        raise AndroidGatewayError("At least one destination number and a message are required")
 
     url = f"{config.ANDROID_SMS_GATEWAY_URL.rstrip('/')}/messages"
     payload = {
         "textMessage": {"text": message},
-        "phoneNumbers": [_to_e164(to_number)],
+        "phoneNumbers": [_to_e164(n) for n in to_numbers],
     }
 
     try:

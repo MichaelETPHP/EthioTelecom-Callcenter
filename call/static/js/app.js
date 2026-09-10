@@ -43,11 +43,18 @@
 
   const smsSenderLabelEl = $("smsSenderLabel");
   const smsToEl = $("smsTo");
+  const smsRecipientCountEl = $("smsRecipientCount");
+  const smsRecipientChipsEl = $("smsRecipientChips");
   const smsMessageEl = $("smsMessage");
   const smsCharCountEl = $("smsCharCount");
   const btnSendSms = $("btnSendSms");
   const smsResultEl = $("smsResult");
   const smsLogBody = $("smsLogBody");
+
+  const pickerFilterEl = $("pickerFilter");
+  const pickerListEl = $("pickerList");
+  const pickerSelectAllEl = $("pickerSelectAll");
+  const btnAddSelected = $("btnAddSelected");
 
   // ---------------------------------------------------------------------
   // State
@@ -222,7 +229,202 @@
   }
 
   // ---------------------------------------------------------------------
-  // SMS (USB GSM/3G dongle)
+  // SMS — recipient picker (check callers from Call History, add them to
+  // the "To" field below instead of typing numbers by hand)
+  // ---------------------------------------------------------------------
+  let callerDirectory = []; // [{ peer, lastContact }], most recent first, deduped
+  const selectedCallers = new Set();
+
+  async function loadCallerDirectory() {
+    try {
+      const res = await fetch("api/calls");
+      const rows = await res.json();
+      const seen = new Set();
+      callerDirectory = [];
+      for (const r of rows) {
+        if (seen.has(r.peer)) continue;
+        seen.add(r.peer);
+        callerDirectory.push({ peer: r.peer, lastContact: r.started_at });
+      }
+      renderPickerList();
+    } catch (e) {
+      console.warn("Failed to load caller directory", e);
+    }
+  }
+
+  function renderPickerList() {
+    const filter = pickerFilterEl.value.trim().toLowerCase();
+    const visible = filter ? callerDirectory.filter((c) => c.peer.toLowerCase().includes(filter)) : callerDirectory;
+
+    if (!callerDirectory.length) {
+      pickerListEl.innerHTML = `<div class="muted picker-empty">No callers yet.</div>`;
+    } else if (!visible.length) {
+      pickerListEl.innerHTML = `<div class="muted picker-empty">No matches.</div>`;
+    } else {
+      pickerListEl.innerHTML = "";
+      visible.forEach((c) => {
+        const row = document.createElement("label");
+        row.className = "picker-row";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = selectedCallers.has(c.peer);
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked) selectedCallers.add(c.peer);
+          else selectedCallers.delete(c.peer);
+          updatePickerControls();
+        });
+
+        const number = document.createElement("span");
+        number.className = "picker-number";
+        number.textContent = c.peer;
+
+        const when = document.createElement("span");
+        when.className = "picker-when";
+        when.textContent = new Date(c.lastContact).toLocaleDateString();
+
+        row.append(checkbox, number, when);
+        pickerListEl.appendChild(row);
+      });
+    }
+
+    updatePickerControls();
+  }
+
+  function updatePickerControls() {
+    const visibleCount = pickerListEl.querySelectorAll(".picker-row").length;
+    const visibleChecked = pickerListEl.querySelectorAll(".picker-row input:checked").length;
+
+    pickerSelectAllEl.checked = visibleCount > 0 && visibleChecked === visibleCount;
+    pickerSelectAllEl.indeterminate = visibleChecked > 0 && visibleChecked < visibleCount;
+
+    btnAddSelected.disabled = selectedCallers.size === 0;
+    btnAddSelected.textContent = selectedCallers.size > 0 ? `Add selected (${selectedCallers.size})` : "Add selected";
+  }
+
+  if (pickerFilterEl) {
+    pickerFilterEl.addEventListener("input", renderPickerList);
+  }
+
+  if (pickerSelectAllEl) {
+    pickerSelectAllEl.addEventListener("change", () => {
+      pickerListEl.querySelectorAll(".picker-row").forEach((row) => {
+        const checkbox = row.querySelector("input");
+        const peer = row.querySelector(".picker-number").textContent;
+        checkbox.checked = pickerSelectAllEl.checked;
+        if (pickerSelectAllEl.checked) selectedCallers.add(peer);
+        else selectedCallers.delete(peer);
+      });
+      updatePickerControls();
+    });
+  }
+
+  if (btnAddSelected) {
+    btnAddSelected.addEventListener("click", () => {
+      const existing = smsToEl.value.trim();
+      const additions = Array.from(selectedCallers).join(", ");
+      smsToEl.value = existing ? `${existing}, ${additions}` : additions;
+
+      selectedCallers.clear();
+      renderPickerList();
+      renderRecipients();
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // SMS — recipients (single or bulk, same field)
+  //
+  // Same normalization rules as android_sms_gateway.py's _to_e164 on the
+  // backend, mirrored here for instant feedback as the agent types/pastes
+  // — the backend re-validates regardless, this is just UX, not the source
+  // of truth.
+  // ---------------------------------------------------------------------
+  const SMS_BULK_MAX_RECIPIENTS = 100;
+
+  function normalizeEthiopianNumber(raw) {
+    const trimmed = raw.trim();
+    const digits = trimmed.replace(/\D/g, "");
+
+    if (trimmed.startsWith("+")) {
+      return { raw: trimmed, e164: `+${digits}`, valid: digits.length >= 9 && digits.length <= 15 };
+    }
+    if (digits.startsWith("0") && digits.length === 10) {
+      return { raw: trimmed, e164: `+251${digits.slice(1)}`, valid: true };
+    }
+    if (digits.startsWith("251") && digits.length === 12) {
+      return { raw: trimmed, e164: `+${digits}`, valid: true };
+    }
+    return { raw: trimmed, e164: trimmed, valid: false };
+  }
+
+  function parseRecipients() {
+    const tokens = smsToEl.value
+      .split(/[,;\n]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const seen = new Set();
+    const recipients = [];
+    for (const token of tokens) {
+      const parsed = normalizeEthiopianNumber(token);
+      const key = parsed.valid ? parsed.e164 : `!${parsed.raw}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      recipients.push(parsed);
+    }
+    return recipients;
+  }
+
+  function renderRecipients() {
+    const recipients = parseRecipients();
+    const validCount = recipients.filter((r) => r.valid).length;
+    const invalidCount = recipients.length - validCount;
+
+    const showChips = recipients.length > 1 || invalidCount > 0;
+    smsRecipientChipsEl.classList.toggle("hidden", !showChips);
+    smsRecipientCountEl.classList.toggle("hidden", recipients.length <= 1 && invalidCount === 0);
+    smsRecipientCountEl.classList.toggle("has-invalid", invalidCount > 0);
+
+    if (recipients.length > 1 || invalidCount > 0) {
+      smsRecipientCountEl.textContent =
+        invalidCount > 0
+          ? `${validCount} recipient${validCount === 1 ? "" : "s"} • ${invalidCount} invalid`
+          : `${validCount} recipient${validCount === 1 ? "" : "s"}`;
+    }
+
+    if (showChips) {
+      smsRecipientChipsEl.innerHTML = "";
+      recipients.forEach((r, i) => {
+        const chip = document.createElement("span");
+        chip.className = `chip${r.valid ? "" : " invalid"}`;
+        const label = document.createElement("span");
+        label.textContent = r.valid ? r.e164 : r.raw;
+        chip.appendChild(label);
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.textContent = "×";
+        removeBtn.title = "Remove";
+        removeBtn.addEventListener("click", () => {
+          const remaining = parseRecipients().filter((_, idx) => idx !== i);
+          smsToEl.value = remaining.map((r2) => r2.raw).join(", ");
+          renderRecipients();
+        });
+        chip.appendChild(removeBtn);
+        smsRecipientChipsEl.appendChild(chip);
+      });
+    }
+
+    btnSendSms.textContent = validCount > 1 ? `Send to ${validCount}` : "Send SMS";
+
+    return recipients;
+  }
+
+  if (smsToEl) {
+    smsToEl.addEventListener("input", renderRecipients);
+  }
+
+  // ---------------------------------------------------------------------
+  // SMS
   // ---------------------------------------------------------------------
   function setSmsResult(message, ok) {
     smsResultEl.textContent = message;
@@ -241,8 +443,13 @@
         .map((r) => {
           const when = new Date(r.created_at).toLocaleString();
           const shortMsg = r.message.length > 60 ? r.message.slice(0, 60) + "…" : r.message;
+          const recipients = r.to_number.split(",").map((n) => n.trim());
+          const toCell =
+            recipients.length > 1
+              ? `<span title="${recipients.join(", ")}">${recipients.length} recipients</span>`
+              : r.to_number;
           return `<tr>
-            <td>${r.to_number}</td>
+            <td>${toCell}</td>
             <td>${shortMsg}</td>
             <td>${r.status === "sent" ? "✅ Sent" : "❌ Failed"}</td>
             <td>${when}</td>
@@ -262,27 +469,43 @@
 
   if (btnSendSms) {
     btnSendSms.addEventListener("click", async () => {
-      const to = smsToEl.value.trim();
+      const recipients = parseRecipients();
+      const validNumbers = recipients.filter((r) => r.valid).map((r) => r.e164);
       const message = smsMessageEl.value.trim();
-      if (!to || !message) {
-        setSmsResult("Enter a number and a message first.", false);
+
+      if (!validNumbers.length || !message) {
+        setSmsResult("Enter at least one valid number and a message.", false);
         return;
       }
+      if (recipients.length > validNumbers.length) {
+        setSmsResult("Fix or remove the invalid number(s) highlighted above first.", false);
+        return;
+      }
+      if (validNumbers.length > SMS_BULK_MAX_RECIPIENTS) {
+        setSmsResult(`Too many recipients — max is ${SMS_BULK_MAX_RECIPIENTS} per send.`, false);
+        return;
+      }
+
       btnSendSms.disabled = true;
-      setSmsResult("Sending…", true);
+      setSmsResult(validNumbers.length > 1 ? `Sending to ${validNumbers.length}…` : "Sending…", true);
       try {
         const res = await fetch("api/sms", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to, message }),
+          body: JSON.stringify({ to: validNumbers, message }),
         });
         const data = await res.json();
         if (res.ok && data.status === "sent") {
-          setSmsResult(`Sent to ${to}.`, true);
+          setSmsResult(
+            data.recipientCount > 1 ? `Queued to ${data.recipientCount} recipients.` : `Sent to ${validNumbers[0]}.`,
+            true
+          );
+          smsToEl.value = "";
           smsMessageEl.value = "";
           smsCharCountEl.textContent = "0";
+          renderRecipients();
         } else {
-          setSmsResult(`Failed: ${data.detail || "unknown error"}`, false);
+          setSmsResult(`Failed: ${data.detail || data.error || "unknown error"}`, false);
         }
       } catch (e) {
         setSmsResult(`Request failed: ${e.message}`, false);
@@ -587,7 +810,10 @@
       Object.values(views).forEach((v) => v.classList.add("hidden"));
       views[item.dataset.view].classList.remove("hidden");
       if (item.dataset.view === "history") loadCallHistory();
-      if (item.dataset.view === "sms") loadSmsLog();
+      if (item.dataset.view === "sms") {
+        loadSmsLog();
+        loadCallerDirectory();
+      }
     });
   });
 

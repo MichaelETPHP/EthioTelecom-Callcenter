@@ -123,9 +123,28 @@
         </div>
 
         <div class="sms-layout">
+          <div class="sms-picker card">
+            <div class="field-row">
+              <label class="field-label" for="pickerFilter">Pick from recent callers</label>
+              <label class="picker-select-all">
+                <input type="checkbox" id="pickerSelectAll" />
+                Select all
+              </label>
+            </div>
+            <input type="text" id="pickerFilter" placeholder="Filter by number…" autocomplete="off" />
+            <div class="picker-list" id="pickerList">
+              <div class="muted picker-empty">No callers yet.</div>
+            </div>
+            <button id="btnAddSelected" class="secondary full-width" disabled>Add selected</button>
+          </div>
+
           <div class="sms-compose card">
-            <label class="field-label" for="smsTo">To (local number)</label>
-            <input type="tel" id="smsTo" placeholder="e.g. 09XXXXXXXX" autocomplete="off" />
+            <div class="field-row">
+              <label class="field-label" for="smsTo">To</label>
+              <span class="recipient-count hidden" id="smsRecipientCount"></span>
+            </div>
+            <input type="text" id="smsTo" placeholder="09XXXXXXXX — add more separated by commas" autocomplete="off" />
+            <div class="recipient-chips hidden" id="smsRecipientChips"></div>
 
             <label class="field-label" for="smsMessage">Message</label>
             <textarea id="smsMessage" rows="4" maxlength="1000" placeholder="Type your message…"></textarea>

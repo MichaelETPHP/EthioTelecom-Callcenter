@@ -147,27 +147,55 @@ def list_sms():
     return jsonify([dict(row) for row in rows])
 
 
-@app.route("/api/sms", methods=["POST"])
-def send_sms():
-    data = request.get_json(force=True, silent=True) or {}
-    to_number = (data.get("to") or "").strip()
-    message = (data.get("message") or "").strip()
-
-    if not to_number or not message:
-        return jsonify({"error": "to and message are required"}), 400
+def _send_bulk(to_numbers, message):
+    """Send one message to every number in to_numbers. The android provider
+    batches all recipients into a single gateway request (one message,
+    fanned out server-side). dongle/smpp have no native batch call, so for
+    those this sends once per number and aggregates the results.
+    Returns (success, detail) - success is True only if every send succeeded.
+    """
+    if config.SMS_PROVIDER == "android":
+        return android_sms_gateway.send_sms(to_numbers, message)
 
     providers = {
         "dongle": (sms_gateway.send_sms, sms_gateway.ModemError),
-        "android": (android_sms_gateway.send_sms, android_sms_gateway.AndroidGatewayError),
         "smpp": (smpp_gateway.send_sms, smpp_gateway.SmppError),
     }
     send_fn, error_cls = providers.get(config.SMS_PROVIDER, providers["dongle"])
 
+    results = []
+    all_ok = True
+    for number in to_numbers:
+        try:
+            ok, detail = send_fn(number, message)
+        except error_cls as e:
+            ok, detail = False, str(e)
+        all_ok = all_ok and ok
+        results.append(f"{number}: {'OK' if ok else 'FAILED'} - {detail}")
+
+    return all_ok, "; ".join(results)
+
+
+@app.route("/api/sms", methods=["POST"])
+def send_sms():
+    data = request.get_json(force=True, silent=True) or {}
+    to_field = data.get("to")
+    to_numbers = to_field if isinstance(to_field, list) else [to_field]
+    to_numbers = [n.strip() for n in to_numbers if n and n.strip()]
+    message = (data.get("message") or "").strip()
+
+    if not to_numbers or not message:
+        return jsonify({"error": "At least one recipient and a message are required"}), 400
+    if len(to_numbers) > config.SMS_BULK_MAX_RECIPIENTS:
+        return jsonify({
+            "error": f"Too many recipients ({len(to_numbers)}). Max is {config.SMS_BULK_MAX_RECIPIENTS} per send."
+        }), 400
+
     db = get_db()
     try:
-        success, detail = send_fn(to_number, message)
+        success, detail = _send_bulk(to_numbers, message)
         status = "sent" if success else "failed"
-    except error_cls as e:
+    except (android_sms_gateway.AndroidGatewayError, sms_gateway.ModemError, smpp_gateway.SmppError) as e:
         success = False
         status = "failed"
         detail = str(e)
@@ -177,11 +205,16 @@ def send_sms():
         INSERT INTO sms_log (to_number, message, status, detail, created_at)
         VALUES (?, ?, ?, ?, ?)
         """,
-        (to_number, message, status, detail, datetime.utcnow().isoformat()),
+        (", ".join(to_numbers), message, status, detail, datetime.utcnow().isoformat()),
     )
     db.commit()
 
-    return jsonify({"id": cur.lastrowid, "status": status, "detail": detail}), (201 if success else 502)
+    return jsonify({
+        "id": cur.lastrowid,
+        "status": status,
+        "detail": detail,
+        "recipientCount": len(to_numbers),
+    }), (201 if success else 502)
 
 
 if __name__ == "__main__":

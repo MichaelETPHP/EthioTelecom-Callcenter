@@ -35,7 +35,11 @@ http: # http server config
     enabled: false # openapi enabled [HTTP__OPENAPI__ENABLED]
 fcm: # firebase cloud messaging config
   credentials_json: "{}" # firebase credentials json (for public mode only) [FCM__CREDENTIALS_JSON]
-  timeout_seconds: 1 # push notification send timeout [FCM__TIMEOUT_SECONDS]
+  # In private/upstream-relay mode the push goes through an extra hop
+  # (api.sms-gate.app) before FCM - give it more room than 1s or timeouts
+  # end up requeuing the push for the next debounce tick (+5s) instead of
+  # just completing. See internal/sms-gateway/modules/push/service.go.
+  timeout_seconds: 10 # push notification send timeout [FCM__TIMEOUT_SECONDS]
   debounce_seconds: 5 # push notification debounce (>= 5s) [FCM__DEBOUNCE_SECONDS]
 sse:
   keep_alive_period_seconds: 15 # SSE keep alive period in seconds [SSE__KEEP_ALIVE_PERIOD_SECONDS]

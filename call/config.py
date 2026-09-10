@@ -42,13 +42,22 @@ SMPP_SYSTEM_ID = os.environ.get("SMPP_SYSTEM_ID", "test")
 SMPP_PASSWORD = os.environ.get("SMPP_PASSWORD", "test")
 SMPP_SOURCE_ADDR = os.environ.get("SMPP_SOURCE_ADDR", SMS_SENDER_LABEL)
 
-# --- Android SMS Gateway (capcom6/android-sms-gateway, local HTTP mode) --
-# Install the app on any spare Android phone with a SIM, enable "Local
-# Server", and put its local IP + the username/password it shows here.
-# The sender the customer sees will be that phone's own SIM number.
+# --- Android SMS Gateway (our private sms-gateway-server, see
+# sms-gateway-server/) --------------------------------------------------
+# ANDROID_SMS_GATEWAY_URL is that server's 3rdparty REST API base, e.g.
+# https://<domain>/sms-api/3rdparty/v1. USERNAME/PASSWORD are the account
+# login issued during device registration (see DEPLOY.md), sent as HTTP
+# Basic Auth. The sender the customer sees is the registered phone's own
+# SIM number.
 ANDROID_SMS_GATEWAY_URL = os.environ.get("ANDROID_SMS_GATEWAY_URL", "")
 ANDROID_SMS_GATEWAY_USERNAME = os.environ.get("ANDROID_SMS_GATEWAY_USERNAME", "")
 ANDROID_SMS_GATEWAY_PASSWORD = os.environ.get("ANDROID_SMS_GATEWAY_PASSWORD", "")
+
+# Upper bound on recipients in a single bulk send from the SMS tab — a
+# sanity cap, not a carrier guarantee. Real-world throughput through one
+# phone's SIM is throttled by the carrier; this just stops a mis-paste of
+# thousands of numbers from being accepted at all.
+SMS_BULK_MAX_RECIPIENTS = int(os.environ.get("SMS_BULK_MAX_RECIPIENTS", "100"))
 
 # Flask
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")
