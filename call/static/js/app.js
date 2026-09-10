@@ -407,6 +407,20 @@
   }
 
   // ---------------------------------------------------------------------
+  // ICE / NAT traversal
+  //
+  // Without a STUN server, WebRTC only gathers "host" ICE candidates (the
+  // browser's private LAN address), which the PBX can't reach if the agent
+  // is behind NAT. That produces one-way audio: the agent's outbound RTP
+  // still gets out (it punches its own NAT hole once the agent talks), but
+  // nothing lets the customer's inbound audio find its way back in, since
+  // no reachable public candidate was ever offered. Used for BOTH outbound
+  // calls and inbound answers - the two must match, or only one call
+  // direction gets NAT traversal.
+  // ---------------------------------------------------------------------
+  const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
+
+  // ---------------------------------------------------------------------
   // Session wiring (shared between inbound and outbound calls)
   // ---------------------------------------------------------------------
   function attachSessionHandlers(session, direction, peer) {
@@ -515,7 +529,10 @@
         attachSessionHandlers(session, "inbound", peer);
 
         btnAccept.onclick = () => {
-          session.answer({ mediaConstraints: { audio: true, video: false } });
+          session.answer({
+            mediaConstraints: { audio: true, video: false },
+            pcConfig: { iceServers: ICE_SERVERS },
+          });
         };
         btnReject.onclick = () => {
           session.terminate();
@@ -535,7 +552,7 @@
 
     const session = ua.call(target, {
       mediaConstraints: { audio: true, video: false },
-      pcConfig: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] },
+      pcConfig: { iceServers: ICE_SERVERS },
     });
 
     outgoingNumberEl.textContent = target;
