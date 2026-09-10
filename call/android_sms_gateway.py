@@ -12,6 +12,8 @@ account's login, used as HTTP Basic Auth) come from. The customer will see
 that phone's own SIM number as the sender, not a custom sender id.
 """
 
+import re
+
 import requests
 from requests.auth import HTTPBasicAuth
 
@@ -22,6 +24,23 @@ class AndroidGatewayError(Exception):
     pass
 
 
+def _to_e164(to_number):
+    """The gateway's 3rdparty API rejects local-format numbers outright
+    (400 "invalid phone number") - it requires E.164. Callers throughout
+    this app pass Ethiopian local format (0916182957), so normalize that
+    one specific, known shape here rather than pushing this concern onto
+    every caller. Anything already starting with "+" is left untouched.
+    """
+    digits = re.sub(r"\D", "", to_number)
+    if to_number.strip().startswith("+"):
+        return f"+{digits}"
+    if digits.startswith("0") and len(digits) == 10:
+        return f"+251{digits[1:]}"
+    if digits.startswith("251"):
+        return f"+{digits}"
+    return to_number
+
+
 def send_sms(to_number, message):
     """Send an SMS via the private SMS Gateway server. Returns (success, detail)."""
     if not to_number or not message:
@@ -30,7 +49,7 @@ def send_sms(to_number, message):
     url = f"{config.ANDROID_SMS_GATEWAY_URL.rstrip('/')}/messages"
     payload = {
         "textMessage": {"text": message},
-        "phoneNumbers": [to_number],
+        "phoneNumbers": [_to_e164(to_number)],
     }
 
     try:
