@@ -11,6 +11,8 @@ services:
     # real domain to THIS service in Coolify's UI - it forwards plain
     # HTTP to whatever port is exposed below, and this Caddy instance
     # just does internal /call and /sms-api path routing behind it.
+    env_file:
+      - .env
     expose:
       - "80"
     volumes:

@@ -20,16 +20,32 @@ sms.ethiotelecom.zmichael.click:80 {
 		reverse_proxy sms-gateway-backend:3000
 	}
 
-	# Confirmed from sms-gateway-backend's own request logs: the real app
-	# (User-Agent me.capcom.smsgateway/1.75.0) POSTs to bare "/device" -
-	# not "/mobile/v1/device" - i.e. it talks to flat paths hung directly
-	# off this origin, with no API version segment at all. The backend's
-	# actual mobile routes are mounted at the literal /api/mobile/v1
-	# prefix internally regardless of HTTP__API__PATH (see
-	# internal/sms-gateway/handlers/root.go and mobile.go's
-	# router.Group("/mobile/v1")), so both /api AND /mobile/v1 need
-	# prepending here - this subdomain exists solely for this app's own
-	# traffic, so every one of its routes lives under that same group.
+	# Registration confirmed reaching the right path after the rewrite
+	# below (backend logs show POST /api/mobile/v1/device), but the real
+	# app (User-Agent me.capcom.smsgateway/1.75.0) still gets 401 there -
+	# it isn't sending the private token in a form our server's default
+	# keyauth (Authorization: Bearer <token>) recognizes, despite the
+	# same token being entered correctly in the app's own settings. Since
+	# this subdomain exists solely for this app's traffic, inject the
+	# token ourselves on this one call only - never on any other path, so
+	# the app's own Basic-auth credentials for already-registered devices
+	# (sending messages, etc.) are never overwritten. Pulled from the env
+	# (see docker-compose.yml's env_file on this service) rather than
+	# hardcoded here, so the token lives in exactly one place (.env).
+	@deviceRegister {
+		method POST
+		path /device
+	}
+	handle @deviceRegister {
+		rewrite * /api/mobile/v1/device
+		reverse_proxy sms-gateway-backend:3000 {
+			header_up Authorization "Bearer {$GATEWAY__PRIVATE_TOKEN}"
+		}
+	}
+
+	# Everything else this app talks to (messages, settings, webhooks,
+	# etc., all under mobile.go's router.Group("/mobile/v1")) still needs
+	# /api/mobile/v1 prepended, same as registration's path did.
 	handle {
 		rewrite * /api/mobile/v1{uri}
 		reverse_proxy sms-gateway-backend:3000
