@@ -95,7 +95,6 @@ def api_config():
             "companyName": config.COMPANY_NAME,
             "server": config.SIP_SERVER,
             "smsSenderLabel": config.SMS_SENDER_LABEL,
-            "smsComPort": config.SMS_COM_PORT,
         }
     )
 
@@ -139,22 +138,8 @@ def log_call():
 
 
 # ---------------------------------------------------------------------------
-# API: SMS (USB GSM/3G dongle, plain AT commands)
+# API: SMS
 # ---------------------------------------------------------------------------
-@app.route("/api/sms/ports", methods=["GET"])
-def sms_ports():
-    """List serial ports Windows can see, to help pick the modem's AT port."""
-    return jsonify(sms_gateway.list_serial_ports())
-
-
-@app.route("/api/sms/test", methods=["POST"])
-def sms_test_port():
-    """Ping a specific port with a plain AT command to check it answers OK."""
-    data = request.get_json(force=True, silent=True) or {}
-    port = data.get("port") or config.SMS_COM_PORT
-    return jsonify(sms_gateway.test_port(port))
-
-
 @app.route("/api/sms", methods=["GET"])
 def list_sms():
     db = get_db()

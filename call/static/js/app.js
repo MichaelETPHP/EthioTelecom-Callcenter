@@ -42,15 +42,11 @@
   const callLogBody = $("callLogBody");
 
   const smsSenderLabelEl = $("smsSenderLabel");
-  const smsConfiguredPortEl = $("smsConfiguredPort");
   const smsToEl = $("smsTo");
   const smsMessageEl = $("smsMessage");
   const smsCharCountEl = $("smsCharCount");
   const btnSendSms = $("btnSendSms");
   const smsResultEl = $("smsResult");
-  const btnScanPorts = $("btnScanPorts");
-  const btnTestPort = $("btnTestPort");
-  const smsPortsListEl = $("smsPortsList");
   const smsLogBody = $("smsLogBody");
 
   // ---------------------------------------------------------------------
@@ -297,51 +293,6 @@
     });
   }
 
-  if (btnScanPorts) {
-    btnScanPorts.addEventListener("click", async () => {
-      smsPortsListEl.innerHTML = `<div class="muted">Scanning…</div>`;
-      try {
-        const res = await fetch("api/sms/ports");
-        const ports = await res.json();
-        if (!ports.length) {
-          smsPortsListEl.innerHTML = `<div class="muted">No serial ports detected. Is the dongle plugged in?</div>`;
-          return;
-        }
-        smsPortsListEl.innerHTML = ports
-          .map(
-            (p) => `<div class="port-row">
-              <span class="port-name">${p.device}</span>
-              <span class="port-desc">${p.description || ""}</span>
-            </div>`
-          )
-          .join("");
-      } catch (e) {
-        smsPortsListEl.innerHTML = `<div class="muted">Scan failed: ${e.message}</div>`;
-      }
-    });
-  }
-
-  if (btnTestPort) {
-    btnTestPort.addEventListener("click", async () => {
-      const port = smsConfiguredPortEl.textContent.trim();
-      smsPortsListEl.innerHTML = `<div class="muted">Testing ${port}…</div>`;
-      try {
-        const res = await fetch("api/sms/test", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ port }),
-        });
-        const data = await res.json();
-        smsPortsListEl.innerHTML = `<div class="port-row">
-          <span class="port-name">${data.port}</span>
-          <span class="${data.ok ? "port-ok" : "port-bad"}">${data.ok ? "Responded OK ✓" : `No response${data.error ? ": " + data.error : ""}`}</span>
-        </div>`;
-      } catch (e) {
-        smsPortsListEl.innerHTML = `<div class="muted">Test failed: ${e.message}</div>`;
-      }
-    });
-  }
-
   // ---------------------------------------------------------------------
   // DTMF pad
   // ---------------------------------------------------------------------
@@ -489,7 +440,6 @@
 
     serverLabelEl.textContent = cfg.server;
     if (smsSenderLabelEl) smsSenderLabelEl.textContent = cfg.smsSenderLabel;
-    if (smsConfiguredPortEl) smsConfiguredPortEl.textContent = cfg.smsComPort;
 
     const socket = new JsSIP.WebSocketInterface(cfg.wsUrl);
     ua = new JsSIP.UA({

@@ -2,7 +2,9 @@ name: ethio-sms-platform
 
 services:
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: caddy/Dockerfile
     restart: unless-stopped
     # No host port binding and no ACME here on purpose: Coolify's own
     # Traefik proxy owns ports 80/443 and terminates HTTPS. Assign the
@@ -12,7 +14,6 @@ services:
     expose:
       - "80"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

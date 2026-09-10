@@ -248,14 +248,8 @@ button {
 }
 
 .sms-layout {
-  display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 20px;
-  align-items: start;
+  max-width: 480px;
   margin-bottom: 28px;
-}
-@media (max-width: 860px) {
-  .sms-layout { grid-template-columns: 1fr; }
 }
 
 .card {
@@ -301,30 +295,9 @@ button.primary {
   font-weight: 600; border-radius: 10px; padding: 12px; border: 1px solid var(--brand); cursor: pointer;
   min-height: 44px;
 }
-button.ghost {
-  width: 100%; background: transparent; border: 1px solid var(--border); color: var(--text);
-  border-radius: 10px; padding: 10px; cursor: pointer; margin-top: 10px; font-size: 13px;
-  transition: transform 160ms var(--ease-out), border-color 150ms ease;
-}
-button.ghost:active { transform: scale(0.97); }
-
 .sms-result { margin-top: 12px; font-size: 13px; min-height: 18px; }
 .sms-result.ok { color: var(--brand); }
 .sms-result.fail { color: var(--red); }
-
-.sms-setup h3 { margin: 0 0 12px; font-size: 14px; }
-.setup-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
-.setup-row code { color: var(--brand); }
-
-.ports-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; }
-.port-row {
-  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px;
-  display: flex; justify-content: space-between; gap: 8px; align-items: center;
-}
-.port-row .port-name { font-weight: 600; }
-.port-row .port-desc { color: var(--muted); flex: 1; }
-.port-row .port-ok { color: var(--brand); font-weight: 600; }
-.port-row .port-bad { color: var(--red); }
 
 .sms-log-heading { margin-top: 0; }
 

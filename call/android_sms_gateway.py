@@ -1,13 +1,15 @@
-"""Send SMS through 'SMS Gateway for Android' (capcom6/android-sms-gateway),
-running in Local Server mode on a spare Android phone with a SIM card.
+"""Send SMS through our private self-hosted SMS Gateway server
+(sms-gateway-server/, part of this repo — the android-sms-gateway/server
+project) rather than talking to a phone's local HTTP API directly. A
+registered Android phone running "SMS Gateway for Android"
+(https://github.com/capcom6/android-sms-gateway) receives the send request
+over FCM push from that server and relays it through its SIM.
 
-https://github.com/capcom6/android-sms-gateway
-
-No special hardware needed beyond the phone itself — install the app,
-enable "Local Server", and point ANDROID_SMS_GATEWAY_URL/USERNAME/PASSWORD
-in config.py at what it shows. The customer will see that phone's own SIM
-number as the sender, same as the USB-dongle approach, but over local
-Wi-Fi/HTTP instead of a serial AT-command connection.
+ANDROID_SMS_GATEWAY_URL is the server's 3rdparty REST API base, e.g.
+https://<domain>/sms-api/3rdparty/v1 — see DEPLOY.md's device registration
+steps for where ANDROID_SMS_GATEWAY_USERNAME/PASSWORD (the registered
+account's login, used as HTTP Basic Auth) come from. The customer will see
+that phone's own SIM number as the sender, not a custom sender id.
 """
 
 import requests
@@ -21,11 +23,11 @@ class AndroidGatewayError(Exception):
 
 
 def send_sms(to_number, message):
-    """Send an SMS via the Android SMS Gateway app. Returns (success, detail)."""
+    """Send an SMS via the private SMS Gateway server. Returns (success, detail)."""
     if not to_number or not message:
         raise AndroidGatewayError("A destination number and message are required")
 
-    url = f"{config.ANDROID_SMS_GATEWAY_URL.rstrip('/')}/message"
+    url = f"{config.ANDROID_SMS_GATEWAY_URL.rstrip('/')}/messages"
     payload = {
         "textMessage": {"text": message},
         "phoneNumbers": [to_number],

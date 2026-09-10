@@ -1,0 +1,3 @@
+# Only the proxy configuration is needed in this build context.
+**
+!Caddyfile

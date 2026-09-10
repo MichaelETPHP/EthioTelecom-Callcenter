@@ -115,9 +115,9 @@
         <h2>Send SMS</h2>
 
         <div class="sms-notice">
-          <strong>Heads up:</strong> this sends through a USB GSM/SIM modem, not a
-          carrier short-code gateway. The recipient will see <strong>the SIM
-          card's own phone number</strong> as the sender — not
+          <strong>Heads up:</strong> this sends through the registered phone on
+          our SMS gateway, not a carrier short-code gateway. The recipient will
+          see <strong>that phone's own SIM number</strong> as the sender — not
           "<span id="smsSenderLabel">8840</span>". A custom sender id like that
           requires an SMPP/aggregator connection instead.
         </div>
@@ -133,17 +133,6 @@
 
             <button id="btnSendSms" class="primary full-width">Send SMS</button>
             <div class="sms-result" id="smsResult"></div>
-          </div>
-
-          <div class="sms-setup card">
-            <h3>Modem setup</h3>
-            <div class="setup-row">
-              <span class="muted">Configured port</span>
-              <code id="smsConfiguredPort">—</code>
-            </div>
-            <button id="btnScanPorts" class="ghost">Detect available ports</button>
-            <button id="btnTestPort" class="ghost">Test configured port</button>
-            <div id="smsPortsList" class="ports-list"></div>
           </div>
         </div>
 
