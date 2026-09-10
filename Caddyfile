@@ -5,6 +5,13 @@
 	# block matches any Host header since Traefik already decided this
 	# container is the right target before the request arrives.
 
+	# Public readiness check: preserve the backend's JSON and HTTP status.
+	# /health returns 503 when a dependency fails; proxy failures return 502.
+	handle /health {
+		header Cache-Control "no-store"
+		reverse_proxy sms-gateway-backend:3000
+	}
+
 	# Bare /call (no trailing slash) must redirect to /call/ first - the
 	# frontend's JS uses relative fetch("api/...") calls that only resolve
 	# correctly when the browser's current path ends in /.
