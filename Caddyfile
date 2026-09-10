@@ -1,9 +1,42 @@
+# sms.ethiotelecom.zmichael.click exists solely because the Android SMS
+# Gateway app's own "API URL" setting only accepts a bare origin
+# (scheme+host, no path) - saving any URL with a path segment (like the
+# /sms-api prefix the main domain uses) gets silently truncated back down
+# to just "https://host:443" by the app itself, so it can never be pointed
+# at a path-prefixed deployment. This subdomain gives it a path-free root
+# to register against instead. Split into its own explicit-hostname block
+# (rather than the bare, host-agnostic :80 block below) so it can behave
+# differently from the main domain sharing this same Caddy container.
+sms.ethiotelecom.zmichael.click:80 {
+	# health and the api-catalog are mounted at the Go app's true root
+	# (AsRootHandler, see module.go) - unlike the mobile/3rdparty routes
+	# below, these must NOT get /api prepended, or they 404.
+	handle /health {
+		header Cache-Control "no-store"
+		reverse_proxy sms-gateway-backend:3000
+	}
+
+	handle /.well-known/api-catalog {
+		reverse_proxy sms-gateway-backend:3000
+	}
+
+	# Everything else (mobile/v1/*, 3rdparty/v1/*, etc.) is mounted at the
+	# literal /api prefix internally regardless of HTTP__API__PATH (see
+	# internal/sms-gateway/handlers/root.go) - so it still needs /api
+	# prepended before reaching the backend, even at this domain's root.
+	handle {
+		rewrite * /api{uri}
+		reverse_proxy sms-gateway-backend:3000
+	}
+}
+
 :80 {
 	# Plain HTTP, no automatic HTTPS here - Coolify's own Traefik proxy
 	# in front of this container already terminates TLS for
 	# ethiotelecom.zmichael.click and forwards decrypted HTTP here. This
-	# block matches any Host header since Traefik already decided this
-	# container is the right target before the request arrives.
+	# block matches any Host header other than sms.ethiotelecom.zmichael.click
+	# (claimed by the explicit block above) since Traefik already decided
+	# this container is the right target before the request arrives.
 
 	# Public readiness check: preserve the backend's JSON and HTTP status.
 	# /health returns 503 when a dependency fails; proxy failures return 502.
