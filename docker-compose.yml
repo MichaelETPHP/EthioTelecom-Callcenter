@@ -44,9 +44,6 @@ services:
       - CONFIG_PATH=config.yml
     expose:
       - "3000"
-    depends_on:
-      mariadb:
-        condition: service_healthy
 
   sms-gateway-worker:
     build:
@@ -60,30 +57,8 @@ services:
       - ./sms-gateway-server/configs/config.yml:/app/config.yml:ro
     environment:
       - CONFIG_PATH=config.yml
-    depends_on:
-      mariadb:
-        condition: service_healthy
-
-  mariadb:
-    image: mariadb:lts
-    restart: unless-stopped
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
-      - MYSQL_DATABASE=sms
-      - MYSQL_USER=sms
-      - MYSQL_PASSWORD=sms
-      - MARIADB_AUTO_UPGRADE=1
-    volumes:
-      - mariadb_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      start_period: 10s
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
 volumes:
   caddy_data:
   caddy_config:
   call_data:
-  mariadb_data:

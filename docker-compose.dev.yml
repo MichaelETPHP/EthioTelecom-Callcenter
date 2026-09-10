@@ -1,0 +1,13 @@
+name: ethio-sms-platform
+
+# Local-dev-only overlay: docker-compose.yml deliberately publishes no host
+# ports (it's designed to sit behind Coolify's Traefik / a reverse proxy).
+# This file adds a host port mapping so the SMS Gateway API is reachable at
+# http://localhost:3000 when running locally. Not used in production deploy
+# (DEPLOY.md doesn't reference it) - only pulled in by start-dev.bat via
+# `docker compose -f docker-compose.yml -f docker-compose.dev.yml`.
+
+services:
+  sms-gateway-backend:
+    ports:
+      - "3000:3000"

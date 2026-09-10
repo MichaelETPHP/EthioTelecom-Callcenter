@@ -1,8 +1,13 @@
 ## Common Config ##
 
-# Supported: MySQL 8.0.13+ or MariaDB 10.2.7+
-# Recommended: MariaDB LTS
+# Supported dialects: mysql, mariadb, postgres
+# For Supabase: dialect postgres, host db.<project-ref>.supabase.co, port 5432,
+# user postgres, password <your db password>, database postgres.
+# Get these from the Supabase dashboard: Project Settings -> Database ->
+# Connection string (use the direct/session connection, not the "Transaction"
+# pooler on port 6543 - this server keeps a persistent connection pool).
 database: # database
+  dialect: mysql # database dialect: mysql, mariadb or postgres [DATABASE__DIALECT]
   host: localhost # database host [DATABASE__HOST]
   port: 3306 # database port [DATABASE__PORT]
   user: root # database user [DATABASE__USER]

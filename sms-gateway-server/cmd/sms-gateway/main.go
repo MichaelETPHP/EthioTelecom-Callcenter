@@ -6,6 +6,13 @@ import (
 	"github.com/android-sms-gateway/server/internal/health"
 	smsgateway "github.com/android-sms-gateway/server/internal/sms-gateway"
 	"github.com/android-sms-gateway/server/internal/worker"
+
+	// database/sql driver registration: go-infra-fx/db calls sql.Open() with
+	// the configured dialect name directly, so the matching driver needs to
+	// self-register here. MySQL/MariaDB come for free via a dependency of
+	// go-infra-fx itself; Postgres does not, since gorm's postgres driver
+	// registers under "pgx", not "postgres".
+	_ "github.com/lib/pq"
 )
 
 const (

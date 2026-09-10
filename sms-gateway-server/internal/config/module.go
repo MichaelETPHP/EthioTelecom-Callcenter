@@ -49,7 +49,7 @@ func Module() fx.Option {
 		}),
 		fx.Provide(func(cfg Config) db.Config {
 			return db.Config{
-				Dialect:  db.DialectMySQL,
+				Dialect:  db.Dialect(cfg.Database.Dialect),
 				Host:     cfg.Database.Host,
 				Port:     cfg.Database.Port,
 				User:     cfg.Database.User,
