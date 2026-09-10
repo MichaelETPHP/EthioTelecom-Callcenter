@@ -27,10 +27,16 @@
 		}
 	}
 
-	# The Go server's own HTTP__API__PATH is set to /sms-api (see
-	# sms-gateway-server/configs/config.yml), so no path rewriting is
-	# needed here - just pass everything through as-is.
-	handle /sms-api/* {
+	# HTTP__API__PATH=/sms-api only affects the Go server's own OpenAPI
+	# metadata and its outgoing Location-header rewriting - the app's
+	# actual routes are always mounted at the literal /api prefix
+	# internally (see internal/sms-gateway/handlers/root.go, which checks
+	# c.Path() == "/api" verbatim). So /sms-api must be stripped and
+	# swapped for /api before reaching the backend, or every request
+	# 404s - confirmed live: /sms-api/3rdparty/v1/health/live -> 404,
+	# /api/3rdparty/v1/health/live -> 200.
+	handle_path /sms-api/* {
+		rewrite * /api{uri}
 		reverse_proxy sms-gateway-backend:3000
 	}
 
