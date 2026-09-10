@@ -38,10 +38,8 @@ services:
       args:
         - APP=sms-gateway
     restart: unless-stopped
-    volumes:
-      - ./sms-gateway-server/configs/config.yml:/app/config.yml:ro
-    environment:
-      - CONFIG_PATH=config.yml
+    env_file:
+      - .env
     expose:
       - "3000"
 
@@ -53,10 +51,8 @@ services:
         - APP=sms-gateway
     command: ["/app/app", "worker"]
     restart: unless-stopped
-    volumes:
-      - ./sms-gateway-server/configs/config.yml:/app/config.yml:ro
-    environment:
-      - CONFIG_PATH=config.yml
+    env_file:
+      - .env
 
 volumes:
   caddy_data:
