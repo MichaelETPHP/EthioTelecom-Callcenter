@@ -12,6 +12,20 @@
 		reverse_proxy sms-gateway-backend:3000
 	}
 
+	# RFC 9727 API-catalog discovery - the Go app mounts this literally at
+	# its own root (see internal/sms-gateway/handlers/api_catalog.go's
+	# app.Group("/.well-known/api-catalog", ...)), unprefixed, and every
+	# response's Link header points clients here to discover the real API
+	# paths before registering. With no rule for it at all, Caddy fell
+	# through unmatched and answered with a fake "200 OK, empty body"
+	# instead of a 404 or the real catalog JSON - a client relying on this
+	# for discovery (rather than a hardcoded path) would get an unparseable
+	# empty response and could silently fail before ever attempting device
+	# registration. No rewrite needed - same path internally and externally.
+	handle /.well-known/api-catalog {
+		reverse_proxy sms-gateway-backend:3000
+	}
+
 	# Bare /call (no trailing slash) must redirect to /call/ first - the
 	# frontend's JS uses relative fetch("api/...") calls that only resolve
 	# correctly when the browser's current path ends in /.
