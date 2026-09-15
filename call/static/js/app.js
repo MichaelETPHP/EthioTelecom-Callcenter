@@ -36,9 +36,15 @@
 
   const btnAvailable = $("btnAvailable");
   const btnAway = $("btnAway");
+  const btnEnableAudio = $("btnEnableAudio");
 
   const navItems = document.querySelectorAll(".nav-item");
-  const views = { phone: $("view-phone"), sms: $("view-sms"), history: $("view-history") };
+  const views = {
+    phone: $("view-phone"),
+    sms: $("view-sms"),
+    history: $("view-history"),
+    developers: $("view-developers"),
+  };
   const callLogBody = $("callLogBody");
 
   const smsSenderLabelEl = $("smsSenderLabel");
@@ -55,6 +61,13 @@
   const pickerListEl = $("pickerList");
   const pickerSelectAllEl = $("pickerSelectAll");
   const btnAddSelected = $("btnAddSelected");
+  const developerView = $("view-developers");
+  const developerApiBaseEl = $("developerApiBase");
+  const developerMobileBaseEl = $("developerMobileBase");
+  const developerMobileBaseTopEl = $("developerMobileBaseTop");
+  const developerCodeEl = $("developerCode");
+  const authTestCodeEl = $("authTestCode");
+  const statusCodeEl = $("statusCode");
 
   // ---------------------------------------------------------------------
   // State
@@ -66,6 +79,71 @@
   let ringtoneNodes = null;
   let sessionDirection = null; // 'inbound' | 'outbound'
   let sessionPeer = null;
+
+  function initializeDeveloperDocs() {
+    if (!developerView) return;
+    const configuredApiBase = developerView.dataset.apiBase.trim();
+    const apiBase = (configuredApiBase || `${window.location.origin}/sms-api/3rdparty/v1`).replace(/\/$/, "");
+    const configuredMobileBase = developerView.dataset.mobileBase.trim();
+    const localHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+    const mobileBase = configuredMobileBase || (localHost
+      ? window.location.origin
+      : `${window.location.protocol}//sms.${window.location.hostname}`);
+    developerApiBaseEl.textContent = apiBase;
+    developerMobileBaseEl.textContent = mobileBase.replace(/\/$/, "");
+    developerMobileBaseTopEl.textContent = mobileBase.replace(/\/$/, "");
+    statusCodeEl.textContent = `curl "${apiBase}/messages/MESSAGE_ID" \\\n+  -u "$SMS_API_USER:$SMS_API_PASSWORD"`;
+    authTestCodeEl.textContent = `curl -i "${apiBase}/devices" \\\n+  -u "$SMS_API_USER:$SMS_API_PASSWORD"`;
+
+    const snippets = {
+      curl: `curl -X POST "${apiBase}/messages" \\\n+  -u "$SMS_API_USER:$SMS_API_PASSWORD" \\\n+  -H "Content-Type: application/json" \\\n+  -d '{"textMessage":{"text":"Hello from my app"},"phoneNumbers":["+251911234567"]}'`,
+      javascript: `// Node.js server code. Keep credentials out of browser JavaScript.\nconst credentials = Buffer.from(\n  process.env.SMS_API_USER + ":" + process.env.SMS_API_PASSWORD\n).toString("base64");\n\nconst response = await fetch("${apiBase}/messages", {\n  method: "POST",\n  headers: {\n    Authorization: "Basic " + credentials,\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({\n    textMessage: { text: "Hello from my JavaScript server" },\n    phoneNumbers: ["+251911234567"]\n  })\n});\n\nif (!response.ok) throw new Error(await response.text());\nconsole.log(await response.json());`,
+      nextjs: `// app/api/send-sms/route.ts\nimport { NextResponse } from "next/server";\n\nexport async function POST(request: Request) {\n  const { phoneNumber, message } = await request.json();\n  const credentials = Buffer.from(\n    process.env.SMS_API_USER + ":" + process.env.SMS_API_PASSWORD\n  ).toString("base64");\n\n  const response = await fetch("${apiBase}/messages", {\n    method: "POST",\n    headers: {\n      Authorization: "Basic " + credentials,\n      "Content-Type": "application/json"\n    },\n    body: JSON.stringify({\n      textMessage: { text: message },\n      phoneNumbers: [phoneNumber]\n    })\n  });\n\n  const data = await response.json();\n  return NextResponse.json(data, { status: response.status });\n}`,
+      sveltekit: `// src/routes/api/send-sms/+server.ts\nimport { json } from "@sveltejs/kit";\nimport { SMS_API_USER, SMS_API_PASSWORD } from "$env/static/private";\n\nexport async function POST({ request, fetch }) {\n  const { phoneNumber, message } = await request.json();\n  const credentials = btoa(SMS_API_USER + ":" + SMS_API_PASSWORD);\n\n  const response = await fetch("${apiBase}/messages", {\n    method: "POST",\n    headers: {\n      Authorization: "Basic " + credentials,\n      "Content-Type": "application/json"\n    },\n    body: JSON.stringify({\n      textMessage: { text: message },\n      phoneNumbers: [phoneNumber]\n    })\n  });\n\n  return json(await response.json(), { status: response.status });\n}`,
+      python: `import os\nimport requests\n\nresponse = requests.post(\n    "${apiBase}/messages",\n    auth=(os.environ["SMS_API_USER"], os.environ["SMS_API_PASSWORD"]),\n    json={\n        "textMessage": {"text": "Hello from my app"},\n        "phoneNumbers": ["+251911234567"],\n    },\n    timeout=15,\n)\nresponse.raise_for_status()\nprint(response.json())`,
+      php: `$payload = json_encode([\n  'textMessage' => ['text' => 'Hello from my app'],\n  'phoneNumbers' => ['+251911234567'],\n]);\n\n$ch = curl_init('${apiBase}/messages');\ncurl_setopt_array($ch, [\n  CURLOPT_POST => true,\n  CURLOPT_POSTFIELDS => $payload,\n  CURLOPT_HTTPHEADER => ['Content-Type: application/json'],\n  CURLOPT_USERPWD => getenv('SMS_API_USER') . ':' . getenv('SMS_API_PASSWORD'),\n  CURLOPT_RETURNTRANSFER => true,\n]);\n$response = curl_exec($ch);\nif (curl_getinfo($ch, CURLINFO_HTTP_CODE) !== 202) {\n  throw new RuntimeException($response);\n}\necho $response;`,
+    };
+
+    authTestCodeEl.textContent = authTestCodeEl.textContent.replace(/\n\+/g, "\n");
+    statusCodeEl.textContent = statusCodeEl.textContent.replace(/\n\+/g, "\n");
+    Object.keys(snippets).forEach((key) => {
+      snippets[key] = snippets[key].replace(/\n\+/g, "\n");
+    });
+
+    function showSnippet(language) {
+      developerCodeEl.textContent = snippets[language];
+      document.querySelectorAll(".code-tab").forEach((tab) => {
+        tab.classList.toggle("active", tab.dataset.language === language);
+      });
+    }
+
+    document.querySelectorAll(".code-tab").forEach((tab) => {
+      tab.addEventListener("click", () => showSnippet(tab.dataset.language));
+    });
+    document.querySelectorAll(".copy-btn").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const target = $(button.dataset.copyTarget);
+        try {
+          await navigator.clipboard.writeText(target.textContent);
+          const original = button.textContent;
+          button.textContent = "Copied";
+          setTimeout(() => { button.textContent = original; }, 1400);
+        } catch (_) {
+          button.textContent = "Select and copy";
+        }
+      });
+    });
+    const docsLinks = Array.from(document.querySelectorAll(".docs-index a"));
+    const docsSections = docsLinks.map((link) => $(link.hash.slice(1))).filter(Boolean);
+    const docsObserver = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      docsLinks.forEach((link) => link.classList.toggle("active", link.hash === `#${visible.target.id}`));
+    }, { root: document.querySelector(".main"), rootMargin: "-15% 0px -65%", threshold: [0, 0.25, 0.6] });
+    docsSections.forEach((section) => docsObserver.observe(section));
+    showSnippet("curl");
+  }
 
   const stages = { idle: stageIdle, incoming: stageIncoming, active: stageActive, outgoing: stageOutgoing };
 
@@ -93,72 +171,85 @@
   // 2s on / 4s off cadence. Generated with WebAudio, no asset needed.
   // ---------------------------------------------------------------------
   let sharedAudioCtx = null;
+  let audioUnlocked = false;
+  let toneGeneration = 0;
 
-  // Browsers block audio until a user gesture; unlock a shared context on
-  // the first click/tap anywhere so the ringtone can play automatically
-  // the moment a real incoming call arrives later.
-  function unlockAudio() {
+  // Browsers only allow sound after a user gesture. Any click or key press
+  // primes audio, and the visible button lets an agent do this explicitly.
+  async function unlockAudio() {
     if (!sharedAudioCtx) {
       sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    if (sharedAudioCtx.state === "suspended") sharedAudioCtx.resume();
+    if (sharedAudioCtx.state === "suspended") await sharedAudioCtx.resume();
+    audioUnlocked = sharedAudioCtx.state === "running";
+    if (audioUnlocked && btnEnableAudio) {
+      btnEnableAudio.classList.add("enabled");
+      btnEnableAudio.innerHTML = '<span class="dot dot-green"></span> Call sounds enabled';
+    }
+    return audioUnlocked;
   }
-  ["click", "touchstart", "keydown"].forEach((evt) =>
-    document.addEventListener(evt, unlockAudio, { once: true, passive: true })
-  );
+  document.addEventListener("pointerdown", unlockAudio, { once: true });
+  document.addEventListener("keydown", unlockAudio, { once: true });
+  if (btnEnableAudio) btnEnableAudio.addEventListener("click", unlockAudio);
 
-  const RING_ON = 2; // seconds
-  const RING_OFF = 4; // seconds
-  const RING_CYCLE = RING_ON + RING_OFF;
-
-  function startRingtone() {
+  async function startLocalTone(kind) {
     stopRingtone();
-    if (!sharedAudioCtx) {
-      sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const generation = toneGeneration;
+    try {
+      await unlockAudio();
+    } catch (error) {
+      console.warn("Browser blocked call audio", error);
+      return;
     }
-    const ctx = sharedAudioCtx;
-    if (ctx.state === "suspended") ctx.resume();
+    if (!audioUnlocked || generation !== toneGeneration) return;
 
+    const ctx = sharedAudioCtx;
+    const incoming = kind === "incoming";
+    const frequencies = incoming ? [440, 480] : [425];
+    const onSeconds = incoming ? 2 : 1;
+    const offSeconds = 4;
+    const level = incoming ? 0.2 : 0.14;
+    const cycleSeconds = onSeconds + offSeconds;
     const gain = ctx.createGain();
     gain.gain.value = 0;
     gain.connect(ctx.destination);
+    const oscillators = frequencies.map((frequency) => {
+      const oscillator = ctx.createOscillator();
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+      oscillator.connect(gain);
+      oscillator.start();
+      return oscillator;
+    });
 
-    const osc1 = ctx.createOscillator();
-    osc1.type = "sine";
-    osc1.frequency.value = 440;
-    const osc2 = ctx.createOscillator();
-    osc2.type = "sine";
-    osc2.frequency.value = 480;
-    osc1.connect(gain);
-    osc2.connect(gain);
-    osc1.start();
-    osc2.start();
-
-    // Schedule the on/off envelope ahead of time on the audio clock itself
-    // (not setInterval) so the cadence stays precise and click-free.
     function scheduleCycle(startTime) {
       gain.gain.setValueAtTime(0, startTime);
-      gain.gain.linearRampToValueAtTime(0.18, startTime + 0.03);
-      gain.gain.setValueAtTime(0.18, startTime + RING_ON - 0.03);
-      gain.gain.linearRampToValueAtTime(0, startTime + RING_ON);
+      gain.gain.linearRampToValueAtTime(level, startTime + 0.025);
+      gain.gain.setValueAtTime(level, startTime + onSeconds - 0.025);
+      gain.gain.linearRampToValueAtTime(0, startTime + onSeconds);
     }
 
-    let nextStart = ctx.currentTime + 0.05;
+    let nextStart = ctx.currentTime + 0.03;
     scheduleCycle(nextStart);
     const timerId = setInterval(() => {
-      nextStart += RING_CYCLE;
+      nextStart += cycleSeconds;
       scheduleCycle(nextStart);
-    }, RING_CYCLE * 1000);
-
-    ringtoneNodes = { osc1, osc2, gain, timerId };
+    }, cycleSeconds * 1000);
+    ringtoneNodes = { oscillators, gain, timerId, kind };
   }
 
+  function startRingtone() { startLocalTone("incoming"); }
+  function startRingback() { startLocalTone("ringback"); }
+
   function stopRingtone() {
+    toneGeneration += 1;
     if (ringtoneNodes) {
       clearInterval(ringtoneNodes.timerId);
       try {
-        ringtoneNodes.osc1.stop();
-        ringtoneNodes.osc2.stop();
+        const now = sharedAudioCtx ? sharedAudioCtx.currentTime : 0;
+        ringtoneNodes.gain.gain.cancelScheduledValues(now);
+        ringtoneNodes.gain.gain.setValueAtTime(0, now);
+        ringtoneNodes.oscillators.forEach((oscillator) => oscillator.stop());
       } catch (e) {}
     }
     ringtoneNodes = null;
@@ -604,12 +695,23 @@
 
     session.on("peerconnection", (data) => {
       data.peerconnection.addEventListener("track", (event) => {
+        // The PBX may provide real early media (carrier ringback or an
+        // announcement). Prefer it over our locally generated ringback.
+        if (direction === "outbound") stopRingtone();
         remoteAudio.srcObject = event.streams[0];
+        remoteAudio.play().catch((error) => {
+          console.warn("Remote call audio was blocked", error);
+          if (btnEnableAudio) {
+            btnEnableAudio.classList.remove("enabled");
+            btnEnableAudio.innerHTML = '<span class="dot dot-yellow"></span> Enable call sounds';
+          }
+        });
       });
     });
 
     session.on("accepted", () => {
       stopRingtone();
+      remoteAudio.play().catch(() => {});
       setStage("active");
       activeNumberEl.textContent = peer;
       startTimer();
@@ -617,6 +719,7 @@
 
     session.on("confirmed", () => {
       stopRingtone();
+      remoteAudio.play().catch(() => {});
       setStage("active");
       activeNumberEl.textContent = peer;
       if (!callStartedAt) startTimer();
@@ -702,12 +805,14 @@
         attachSessionHandlers(session, "inbound", peer);
 
         btnAccept.onclick = () => {
+          stopRingtone();
           session.answer({
             mediaConstraints: { audio: true, video: false },
             pcConfig: { iceServers: ICE_SERVERS },
           });
         };
         btnReject.onclick = () => {
+          stopRingtone();
           session.terminate();
         };
       }
@@ -731,6 +836,7 @@
     outgoingNumberEl.textContent = target;
     setStage("outgoing");
     attachSessionHandlers(session, "outbound", target);
+    startRingback();
 
     btnCancelOutgoing.onclick = () => session.terminate();
   }
@@ -821,6 +927,7 @@
   // Boot
   // ---------------------------------------------------------------------
   setStage("idle");
+  initializeDeveloperDocs();
   initSip().catch((e) => {
     console.error(e);
     setRegStatus("bad", `Setup failed: ${e.message || e}`);

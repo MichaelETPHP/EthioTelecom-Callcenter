@@ -77,7 +77,13 @@ init_db()
 # ---------------------------------------------------------------------------
 @app.route("/")
 def index():
-    return render_template("index.html", company_name=config.COMPANY_NAME)
+    return render_template(
+        "index.html",
+        company_name=config.COMPANY_NAME,
+        public_sms_api_url=config.PUBLIC_SMS_API_URL,
+        public_sms_mobile_url=config.PUBLIC_SMS_MOBILE_URL,
+        android_app_url=config.ANDROID_APP_URL,
+    )
 
 
 # ---------------------------------------------------------------------------

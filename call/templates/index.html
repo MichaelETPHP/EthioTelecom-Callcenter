@@ -34,10 +34,16 @@
         <button class="status-btn" data-status="away" id="btnAway">Away</button>
       </div>
 
+      <button class="sound-permission" id="btnEnableAudio" type="button">
+        <span class="dot dot-yellow"></span>
+        Enable call sounds
+      </button>
+
       <nav class="nav">
         <button class="nav-item active" data-view="phone">☎ Phone</button>
         <button class="nav-item" data-view="sms">✉ SMS</button>
         <button class="nav-item" data-view="history">🕘 Call History</button>
+        <button class="nav-item" data-view="developers">&lt;/&gt; Developers</button>
       </nav>
 
       <div class="sidebar-footer">
@@ -180,6 +186,188 @@
               <tr><td colspan="5" class="muted">No calls yet.</td></tr>
             </tbody>
           </table>
+        </div>
+      </section>
+      <!-- Developer API documentation -->
+      <section class="view developer-view hidden" id="view-developers"
+        data-api-base="{{ public_sms_api_url }}"
+        data-mobile-base="{{ public_sms_mobile_url }}">
+        <div class="docs-shell">
+          <aside class="docs-index" aria-label="API documentation navigation">
+            <strong>SMS API</strong>
+            <nav>
+              <a class="active" href="#docs-overview">Overview</a>
+              <a href="#docs-quickstart">Quick start</a>
+              <a href="#docs-authentication">Authentication</a>
+              <a href="#docs-send">Send a message</a>
+              <a href="#docs-status">Message status</a>
+              <a href="#docs-devices">Devices</a>
+              <a href="#docs-errors">Errors</a>
+              <a href="#docs-production">Production checklist</a>
+            </nav>
+            <div class="docs-index-meta"><span>API version</span><code>v1</code></div>
+          </aside>
+          <div class="docs-content">
+        <header class="developer-hero">
+          <div>
+            <h2 id="docs-overview">SMS API documentation</h2>
+            <p>Send SMS from any backend through your own Android phone and SIM. This guide takes you from phone registration to a production request.</p>
+          </div>
+          <div class="api-status" aria-label="API status">
+            <span class="dot dot-green"></span>
+            REST API
+          </div>
+        </header>
+
+        <section class="concept-block" aria-label="How the SMS API works">
+          <h3>How it works</h3>
+          <div class="request-flow">
+            <div><strong>Your project</strong><span>Calls the REST API from a secure backend.</span></div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div><strong>SMS platform</strong><span>Authenticates and queues your message.</span></div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div><strong>Your Android phone</strong><span>Sends through your SIM and carrier.</span></div>
+          </div>
+          <div class="truth-note"><strong>Important:</strong> the platform is free to use, but your mobile carrier may charge your SIM for each SMS. The recipient sees your SIM number as the sender.</div>
+        </section>
+
+        <div class="production-label">Production environment</div>
+        <div class="endpoint-strip">
+          <span>Production API URL</span>
+          <code id="developerApiBase">Loading...</code>
+          <button class="copy-btn" type="button" data-copy-target="developerApiBase">Copy</button>
+        </div>
+        <div class="endpoint-strip">
+          <span>Phone registration URL</span>
+          <code id="developerMobileBaseTop">Loading...</code>
+          <button class="copy-btn" type="button" data-copy-target="developerMobileBaseTop">Copy</button>
+        </div>
+
+        <div class="developer-grid" id="docs-quickstart">
+          <aside class="quick-start" aria-label="Quick start">
+            <h3>Start in four steps</h3>
+            <ol>
+              <li><strong>Install the Android app</strong><span>Your phone becomes the SMS gateway.</span></li>
+              <li><strong>Connect this server</strong><span>Use Cloud Server and the server URL below.</span></li>
+              <li><strong>Save your own credentials</strong><span>Registering your phone creates the username and password for your account and SIM.</span></li>
+              <li><strong>Call the API</strong><span>Use Basic auth from your backend, never frontend code.</span></li>
+            </ol>
+            <a class="developer-link" href="{{ android_app_url }}" target="_blank" rel="noreferrer">Get the Android app</a>
+            <div class="mobile-server-box">
+              <span>Android Cloud Server URL</span>
+              <code id="developerMobileBase">Loading...</code>
+              <button class="copy-btn" type="button" data-copy-target="developerMobileBase">Copy</button>
+            </div>
+          </aside>
+
+          <div class="integration-panel" id="docs-send">
+            <div class="code-toolbar">
+              <div class="code-tabs" role="tablist" aria-label="Code language">
+                <button class="code-tab active" type="button" data-language="curl">cURL</button>
+                <button class="code-tab" type="button" data-language="javascript">JavaScript</button>
+                <button class="code-tab" type="button" data-language="nextjs">Next.js</button>
+                <button class="code-tab" type="button" data-language="sveltekit">SvelteKit</button>
+                <button class="code-tab" type="button" data-language="python">Python</button>
+                <button class="code-tab" type="button" data-language="php">PHP</button>
+              </div>
+              <button class="copy-btn" type="button" data-copy-target="developerCode">Copy code</button>
+            </div>
+            <pre class="code-block"><code id="developerCode"></code></pre>
+            <div class="request-notes">
+              <div><strong>Endpoint</strong><code>POST /messages</code></div>
+              <div><strong>Accepted</strong><code>202</code></div>
+              <div><strong>Numbers</strong><code>E.164, e.g. +251...</code></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="developer-details" id="docs-authentication">
+          <section>
+            <h3>Request body</h3>
+            <dl>
+              <div><dt>phoneNumbers</dt><dd>Required array of recipient numbers in international format.</dd></div>
+              <div><dt>textMessage.text</dt><dd>Required SMS content.</dd></div>
+              <div><dt>deviceId</dt><dd>Optional. Choose a phone when your account has multiple devices.</dd></div>
+              <div><dt>withDeliveryReport</dt><dd>Optional boolean for carrier delivery reports.</dd></div>
+            </dl>
+          </section>
+          <section class="security-note">
+            <h3>Your phone, your credentials</h3>
+            <p>Do not place your password or token in React, mobile web, or other browser code. Send requests from your backend and keep secrets in environment variables.</p>
+            <p>The username and password are created when you register your own Android phone. They identify your account; the connected SIM number becomes the SMS sender.</p>
+            <pre><code>SMS_API_USER=YOUR_GENERATED_LOGIN
+SMS_API_PASSWORD=YOUR_GENERATED_PASSWORD</code></pre>
+          </section>
+        </div>
+
+        <section class="api-reference-section" id="docs-status">
+          <div class="reference-heading">
+            <div><span class="method method-get">GET</span><code>/messages/{id}</code></div>
+            <h3>Get message status</h3>
+            <p>Use the <code>id</code> returned by the send request to check processing and delivery state.</p>
+          </div>
+          <div class="reference-columns">
+            <div><h4>Path parameter</h4><div class="parameter-row"><code>id</code><span>string · required</span><p>The message identifier returned by <code>POST /messages</code>.</p></div></div>
+            <div><h4>Example</h4><pre><code id="statusCode"></code></pre><button class="copy-btn" type="button" data-copy-target="statusCode">Copy</button></div>
+          </div>
+        </section>
+
+        <section class="api-reference-section" id="docs-devices">
+          <div class="reference-heading">
+            <div><span class="method method-get">GET</span><code>/devices</code></div>
+            <h3>List your devices</h3>
+            <p>Confirm authentication and find the <code>deviceId</code> when your account has more than one connected phone.</p>
+          </div>
+          <div class="response-contract">
+            <div><code>200</code><span>Credentials accepted; returns your registered devices.</span></div>
+            <div><code>401</code><span>Credentials are missing or incorrect.</span></div>
+          </div>
+        </section>
+
+        <section class="error-guide" id="docs-errors" aria-labelledby="errorGuideTitle">
+          <div class="error-guide-heading">
+            <div>
+              <span class="error-code">401</span>
+              <h3 id="errorGuideTitle">Unauthorized?</h3>
+            </div>
+            <p>Use the account login and password returned when the phone was first registered. Your SIM phone number is the sender, not the API username.</p>
+          </div>
+
+          <div class="credential-map">
+            <div><span>Username</span><strong>Registration response: <code>login</code></strong><small>Usually a generated six-character uppercase ID. Do not enter the phone number.</small></div>
+            <div><span>Password</span><strong>Registration response: <code>password</code></strong><small>Use the exact generated value. It is only returned for a new user.</small></div>
+            <div><span>SIM number</span><strong>SMS sender only</strong><small>This is the number recipients see. It is not used for API authentication.</small></div>
+          </div>
+
+          <div class="auth-test">
+            <div>
+              <strong>Test credentials before sending</strong>
+              <span>A correct login returns your registered devices. A wrong login returns HTTP 401.</span>
+            </div>
+            <button class="copy-btn" type="button" data-copy-target="authTestCode">Copy test</button>
+            <pre><code id="authTestCode"></code></pre>
+          </div>
+
+          <div class="error-table" role="table" aria-label="API errors">
+            <div class="error-row error-header" role="row"><span>Status</span><span>Meaning</span><span>Fix</span></div>
+            <div class="error-row" role="row"><code>401</code><span>Missing or incorrect credentials</span><span>Use the generated <code>login</code> and <code>password</code> with Basic auth.</span></div>
+            <div class="error-row" role="row"><code>400</code><span>Invalid request or phone number</span><span>Use E.164 numbers such as <code>+251911234567</code> and include message text.</span></div>
+            <div class="error-row" role="row"><code>503</code><span>No eligible online device</span><span>Open the Android app, allow SMS permission, and disable battery optimization.</span></div>
+          </div>
+        </section>
+
+        <section class="production-checklist" id="docs-production">
+          <h3>Production checklist</h3>
+          <div class="checklist-grid">
+            <div><strong>Secrets</strong><span>Store <code>SMS_API_USER</code> and <code>SMS_API_PASSWORD</code> only on your server.</span></div>
+            <div><strong>Validation</strong><span>Convert recipients to E.164 format and reject empty messages before calling the API.</span></div>
+            <div><strong>Delivery</strong><span>Save the returned message ID and query <code>GET /messages/{id}</code> for status.</span></div>
+            <div><strong>Phone uptime</strong><span>Keep the Android phone online with SMS permission and battery optimization disabled.</span></div>
+            <div><strong>Failure handling</strong><span>Retry temporary network and <code>503</code> failures with exponential backoff.</span></div>
+            <div><strong>Consent</strong><span>Send only to recipients who agreed to receive messages and follow carrier rules.</span></div>
+          </div>
+        </section>
+          </div>
         </div>
       </section>
     </main>

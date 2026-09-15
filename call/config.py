@@ -53,6 +53,22 @@ ANDROID_SMS_GATEWAY_URL = os.environ.get("ANDROID_SMS_GATEWAY_URL", "")
 ANDROID_SMS_GATEWAY_USERNAME = os.environ.get("ANDROID_SMS_GATEWAY_USERNAME", "")
 ANDROID_SMS_GATEWAY_PASSWORD = os.environ.get("ANDROID_SMS_GATEWAY_PASSWORD", "")
 
+# Public URLs shown in the developer documentation. Keep these free of
+# credentials. If the API URL is empty, the browser uses /sms-api on the
+# same origin as this console.
+PUBLIC_SMS_API_URL = os.environ.get(
+    "PUBLIC_SMS_API_URL",
+    "https://ethiotelecom.zmichael.click/sms-api/3rdparty/v1",
+)
+PUBLIC_SMS_MOBILE_URL = os.environ.get(
+    "PUBLIC_SMS_MOBILE_URL",
+    "https://sms.ethiotelecom.zmichael.click",
+)
+ANDROID_APP_URL = os.environ.get(
+    "ANDROID_APP_URL",
+    "https://github.com/capcom6/android-sms-gateway/releases",
+)
+
 # Upper bound on recipients in a single bulk send from the SMS tab — a
 # sanity cap, not a carrier guarantee. Real-world throughput through one
 # phone's SIM is throttled by the carrier; this just stops a mis-paste of
