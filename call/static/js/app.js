@@ -20,6 +20,11 @@
   const outgoingNumberEl = $("outgoingNumber");
   const callTimerEl = $("callTimer");
 
+  const incomingCallPopup = $("incomingCallPopup");
+  const popupIncomingNumberEl = $("popupIncomingNumber");
+  const popupBtnAccept = $("popupBtnAccept");
+  const popupBtnReject = $("popupBtnReject");
+
   const btnAccept = $("btnAccept");
   const btnReject = $("btnReject");
   const btnHangup = $("btnHangup");
@@ -186,11 +191,88 @@
       btnEnableAudio.classList.add("enabled");
       btnEnableAudio.innerHTML = '<span class="dot dot-green"></span> Call sounds enabled';
     }
+    requestNotificationPermission();
     return audioUnlocked;
   }
   document.addEventListener("pointerdown", unlockAudio, { once: true });
   document.addEventListener("keydown", unlockAudio, { once: true });
   if (btnEnableAudio) btnEnableAudio.addEventListener("click", unlockAudio);
+
+  // If the tab (or whole browser) is minimized/backgrounded when a call
+  // comes in, the AudioContext itself keeps producing sound just fine —
+  // browsers don't mute a tab that's actively playing audio — but a
+  // suspended context (e.g. before the first user gesture on this page
+  // load) needs resuming once we're back in the foreground.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && sharedAudioCtx && sharedAudioCtx.state === "suspended") {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+  });
+
+  // ---------------------------------------------------------------------
+  // Desktop notification — so a minimized/backgrounded browser still shows
+  // "this number is calling" even though the in-page popup isn't visible.
+  // ---------------------------------------------------------------------
+  function requestNotificationPermission() {
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }
+
+  let incomingCallNotification = null;
+
+  function showIncomingCallNotification(peer) {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    try {
+      incomingCallNotification = new Notification("Incoming call", {
+        body: `${peer} is calling`,
+        icon: "static/img/favicon-64.png",
+        tag: "incoming-call",
+        requireInteraction: true,
+        silent: true, // our own WebAudio ringtone is the sound; avoid doubling up
+      });
+      incomingCallNotification.onclick = () => {
+        window.focus();
+        closeIncomingCallNotification();
+      };
+    } catch (e) {
+      console.warn("Failed to show incoming call notification", e);
+    }
+  }
+
+  function closeIncomingCallNotification() {
+    if (incomingCallNotification) {
+      incomingCallNotification.close();
+      incomingCallNotification = null;
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Title flash — a visible "someone is calling" cue in the browser tab /
+  // taskbar even when the window is minimized or another tab has focus.
+  // ---------------------------------------------------------------------
+  const originalDocumentTitle = document.title;
+  let titleFlashInterval = null;
+
+  function startTitleFlash(peer) {
+    stopTitleFlash();
+    const ringingLabel = `📞 Incoming: ${peer}`;
+    let showRinging = true;
+    document.title = ringingLabel;
+    titleFlashInterval = setInterval(() => {
+      showRinging = !showRinging;
+      document.title = showRinging ? ringingLabel : originalDocumentTitle;
+    }, 1000);
+  }
+
+  function stopTitleFlash() {
+    if (titleFlashInterval) {
+      clearInterval(titleFlashInterval);
+      titleFlashInterval = null;
+    }
+    document.title = originalDocumentTitle;
+  }
 
   async function startLocalTone(kind) {
     stopRingtone();
@@ -229,11 +311,23 @@
       gain.gain.linearRampToValueAtTime(0, startTime + onSeconds);
     }
 
-    let nextStart = ctx.currentTime + 0.03;
-    scheduleCycle(nextStart);
+    // Schedule several minutes of ring cycles up front on the Web Audio
+    // clock (not the main-thread timer). Chrome/Firefox throttle
+    // setInterval in a minimized/backgrounded tab, which used to risk
+    // skipped or delayed rings; pre-scheduling means the audio keeps
+    // playing correctly on time even if the "topping up" timer below
+    // itself runs late.
+    const LOOKAHEAD_CYCLES = 20; // ~2 minutes of ring at the default cadence
+    let scheduledUntil = ctx.currentTime + 0.03;
+    for (let i = 0; i < LOOKAHEAD_CYCLES; i++) {
+      scheduleCycle(scheduledUntil);
+      scheduledUntil += cycleSeconds;
+    }
     const timerId = setInterval(() => {
-      nextStart += cycleSeconds;
-      scheduleCycle(nextStart);
+      while (scheduledUntil < ctx.currentTime + cycleSeconds * LOOKAHEAD_CYCLES) {
+        scheduleCycle(scheduledUntil);
+        scheduledUntil += cycleSeconds;
+      }
     }, cycleSeconds * 1000);
     ringtoneNodes = { oscillators, gain, timerId, kind };
   }
@@ -668,7 +762,7 @@
       candidates.push(displayName.trim());
     }
 
-    return candidates.find(isRealNumber) || "Unknown / Withheld";
+    return candidates.find(isRealNumber) || "Unknown number";
   }
 
   // ---------------------------------------------------------------------
@@ -684,6 +778,34 @@
   // direction gets NAT traversal.
   // ---------------------------------------------------------------------
   const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
+
+  // ---------------------------------------------------------------------
+  // Incoming call alert — the in-page popup, desktop notification, and
+  // title flash all get shown together and torn down together.
+  // ---------------------------------------------------------------------
+  function showIncomingCallAlert(peer) {
+    incomingNumberEl.textContent = peer;
+    popupIncomingNumberEl.textContent = peer;
+    incomingCallPopup.classList.remove("hidden");
+    setStage("incoming");
+    startRingtone();
+    startTitleFlash(peer);
+    if (document.hidden) showIncomingCallNotification(peer);
+  }
+
+  function hideIncomingCallAlert() {
+    incomingCallPopup.classList.add("hidden");
+    stopTitleFlash();
+    closeIncomingCallNotification();
+  }
+
+  // If the agent switches to another browser tab (or minimizes the window)
+  // partway through ringing, still surface a notification.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && sessionDirection === "inbound" && !incomingCallPopup.classList.contains("hidden")) {
+      showIncomingCallNotification(sessionPeer);
+    }
+  });
 
   // ---------------------------------------------------------------------
   // Session wiring (shared between inbound and outbound calls)
@@ -711,6 +833,7 @@
 
     session.on("accepted", () => {
       stopRingtone();
+      hideIncomingCallAlert();
       remoteAudio.play().catch(() => {});
       setStage("active");
       activeNumberEl.textContent = peer;
@@ -719,6 +842,7 @@
 
     session.on("confirmed", () => {
       stopRingtone();
+      hideIncomingCallAlert();
       remoteAudio.play().catch(() => {});
       setStage("active");
       activeNumberEl.textContent = peer;
@@ -727,6 +851,7 @@
 
     session.on("failed", (e) => {
       stopRingtone();
+      hideIncomingCallAlert();
       const elapsed = stopTimer();
       const status = direction === "inbound" ? "missed" : "failed";
       logCall(direction, peer, status, elapsed);
@@ -735,6 +860,7 @@
 
     session.on("ended", () => {
       stopRingtone();
+      hideIncomingCallAlert();
       const elapsed = stopTimer();
       logCall(direction, peer, "answered", elapsed);
       resetToIdle();
@@ -745,6 +871,7 @@
     currentSession = null;
     sessionDirection = null;
     sessionPeer = null;
+    hideIncomingCallAlert();
     dtmfPad.classList.add("hidden");
     btnMute.classList.remove("active-state");
     btnHold.classList.remove("active-state");
@@ -798,23 +925,27 @@
           return;
         }
         const peer = resolveCallerId(data.request, session);
-        incomingNumberEl.textContent = peer;
-        setStage("incoming");
-        startRingtone();
-
         attachSessionHandlers(session, "inbound", peer);
+        showIncomingCallAlert(peer);
 
-        btnAccept.onclick = () => {
+        const acceptCall = () => {
           stopRingtone();
+          hideIncomingCallAlert();
           session.answer({
             mediaConstraints: { audio: true, video: false },
             pcConfig: { iceServers: ICE_SERVERS },
           });
         };
-        btnReject.onclick = () => {
+        const rejectCall = () => {
           stopRingtone();
+          hideIncomingCallAlert();
           session.terminate();
         };
+
+        btnAccept.onclick = acceptCall;
+        btnReject.onclick = rejectCall;
+        popupBtnAccept.onclick = acceptCall;
+        popupBtnReject.onclick = rejectCall;
       }
     });
 

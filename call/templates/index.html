@@ -8,6 +8,21 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
 </head>
 <body>
+  <!-- Incoming call popup — fixed over the whole app so it shows no matter
+       which nav tab (Phone/SMS/History/Developers) is currently open. -->
+  <div class="incoming-call-popup hidden" id="incomingCallPopup" role="alertdialog" aria-live="assertive" aria-label="Incoming call">
+    <div class="incoming-call-card">
+      <div class="pulse-ring"></div>
+      <div class="caller-avatar">📞</div>
+      <div class="caller-label">Incoming call</div>
+      <div class="caller-number" id="popupIncomingNumber">—</div>
+      <div class="call-actions">
+        <button class="call-btn reject" id="popupBtnReject" title="Decline">✕</button>
+        <button class="call-btn accept" id="popupBtnAccept" title="Answer">✓</button>
+      </div>
+    </div>
+  </div>
+
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
