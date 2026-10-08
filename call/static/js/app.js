@@ -43,6 +43,13 @@
   const btnAway = $("btnAway");
   const btnEnableAudio = $("btnEnableAudio");
 
+  const pinModal = $("pinModal");
+  const pinModalCard = $("pinModalCard");
+  const pinInput = $("pinInput");
+  const pinError = $("pinError");
+  const btnPinSubmit = $("btnPinSubmit");
+  const btnPinCancel = $("btnPinCancel");
+
   const navItems = document.querySelectorAll(".nav-item");
   const views = {
     phone: $("view-phone"),
@@ -82,6 +89,11 @@
   const bulkProgressEl = $("bulkProgress");
   const bulkProgressFillEl = $("bulkProgressFill");
   const bulkProgressLabelEl = $("bulkProgressLabel");
+  const bulkStatBatchesEl = $("bulkStatBatches");
+  const bulkStatRecipientsEl = $("bulkStatRecipients");
+  const bulkStatSentEl = $("bulkStatSent");
+  const bulkStatFailedEl = $("bulkStatFailed");
+  const bulkLogBody = $("bulkLogBody");
 
   const developerView = $("view-developers");
   const developerApiBaseEl = $("developerApiBase");
@@ -103,6 +115,9 @@
   let sessionPeer = null;
   let savedContacts = []; // [{id, name, phone, valid}], from /api/contacts
   let smsBulkMaxRecipients = 100; // overwritten from /api/config once it loads
+  let smsUnlocked = false; // gates the ✉ SMS nav tab behind a PIN for this page load
+  let pendingNavItem = null; // the nav item we'll actually activate once the PIN is correct
+  const SMS_SECTION_PIN = "9876"; // default PIN; client-side gate only, not real security
 
   function initializeDeveloperDocs() {
     if (!developerView) return;
@@ -844,6 +859,44 @@
     });
   }
 
+  function newBatchId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  async function loadBulkSmsReport() {
+    try {
+      const res = await fetch("api/bulk-sms/log");
+      const data = await res.json();
+      const totals = data.totals || { recipients: 0, sent: 0, failed: 0, batches: 0 };
+
+      bulkStatBatchesEl.textContent = totals.batches;
+      bulkStatRecipientsEl.textContent = totals.recipients;
+      bulkStatSentEl.textContent = totals.sent;
+      bulkStatFailedEl.textContent = totals.failed;
+
+      const rows = data.rows || [];
+      if (!rows.length) {
+        bulkLogBody.innerHTML = `<tr><td colspan="4" class="muted">No bulk sends yet.</td></tr>`;
+        return;
+      }
+      bulkLogBody.innerHTML = rows
+        .map((r) => {
+          const when = new Date(r.created_at).toLocaleString();
+          const detail = (r.detail || "").length > 80 ? `${r.detail.slice(0, 80)}…` : r.detail || "";
+          return `<tr>
+            <td>${r.phone}</td>
+            <td>${r.status === "sent" ? "✅ Sent" : "❌ Failed"}</td>
+            <td title="${(r.detail || "").replace(/"/g, "&quot;")}">${detail}</td>
+            <td>${when}</td>
+          </tr>`;
+        })
+        .join("");
+    } catch (e) {
+      console.warn("Failed to load Bulk SMS report", e);
+    }
+  }
+
   if (btnSendBulkSms) {
     btnSendBulkSms.addEventListener("click", async () => {
       const recipients = parseBulkRecipients();
@@ -860,6 +913,7 @@
         return;
       }
 
+      const batchId = newBatchId();
       const batches = chunkArray(validNumbers, smsBulkMaxRecipients);
       btnSendBulkSms.disabled = true;
       bulkProgressEl.classList.remove("hidden");
@@ -867,42 +921,40 @@
       setBulkResult("", true);
 
       let sentCount = 0;
-      let failedBatches = 0;
+      let failedCount = 0;
       for (let i = 0; i < batches.length; i++) {
         bulkProgressLabelEl.textContent = `Sending batch ${i + 1} of ${batches.length} (${batches[i].length} numbers)…`;
         try {
-          const res = await fetch("api/sms", {
+          const res = await fetch("api/bulk-sms", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ to: batches[i], message }),
+            body: JSON.stringify({ to: batches[i], message, batchId }),
           });
           const data = await res.json();
-          if (res.ok && data.status === "sent") {
-            sentCount += batches[i].length;
+          if (res.ok) {
+            sentCount += data.sentCount || 0;
+            failedCount += data.failedCount || 0;
           } else {
-            failedBatches += 1;
+            failedCount += batches[i].length;
           }
         } catch (e) {
-          failedBatches += 1;
+          failedCount += batches[i].length;
         }
         bulkProgressFillEl.style.transform = `scaleX(${(i + 1) / batches.length})`;
       }
       bulkProgressLabelEl.textContent = "Done.";
 
-      if (failedBatches === 0) {
-        setBulkResult(
-          `Sent to ${sentCount} recipients across ${batches.length} batch${batches.length === 1 ? "" : "es"}.`,
-          true
-        );
+      if (failedCount === 0) {
+        setBulkResult(`Sent to all ${sentCount} recipients.`, true);
+      } else if (sentCount === 0) {
+        setBulkResult(`Failed to send to all ${failedCount} recipients — see the report below.`, false);
       } else {
-        setBulkResult(
-          `Sent to ${sentCount} recipients, but ${failedBatches} of ${batches.length} batch(es) failed — check the SMS tab's log for details.`,
-          false
-        );
+        setBulkResult(`Sent to ${sentCount} recipients, ${failedCount} failed — see the report below.`, false);
       }
 
       btnSendBulkSms.disabled = false;
       setTimeout(() => bulkProgressEl.classList.add("hidden"), 1500);
+      loadBulkSmsReport();
     });
   }
 
@@ -1249,18 +1301,80 @@
     if (ua && ua.isRegistered()) ua.unregister();
   });
 
+  // ---------------------------------------------------------------------
+  // SMS section PIN gate — the ✉ SMS nav tab asks for a PIN (default 9876)
+  // before it opens, once per page load. Client-side only: a convenience
+  // gate against casual access, not real security (the PIN ships in this
+  // file).
+  // ---------------------------------------------------------------------
+  function openPinModal(navItem) {
+    pendingNavItem = navItem;
+    pinInput.value = "";
+    pinError.classList.add("hidden");
+    pinModal.classList.remove("hidden");
+    pinInput.focus();
+  }
+
+  function closePinModal() {
+    pinModal.classList.add("hidden");
+    pendingNavItem = null;
+  }
+
+  function submitPin() {
+    if (pinInput.value === SMS_SECTION_PIN) {
+      smsUnlocked = true;
+      const navItem = pendingNavItem;
+      closePinModal();
+      if (navItem) activateNavItem(navItem);
+    } else {
+      pinError.classList.remove("hidden");
+      pinInput.value = "";
+      pinInput.focus();
+      pinModalCard.classList.remove("shake");
+      void pinModalCard.offsetWidth; // restart the shake animation on repeat wrong entries
+      pinModalCard.classList.add("shake");
+    }
+  }
+
+  if (btnPinSubmit) btnPinSubmit.addEventListener("click", submitPin);
+  if (btnPinCancel) btnPinCancel.addEventListener("click", closePinModal);
+  if (pinInput) {
+    pinInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitPin();
+    });
+  }
+  if (pinModal) {
+    pinModal.addEventListener("click", (e) => {
+      if (e.target === pinModal) closePinModal();
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !pinModal.classList.contains("hidden")) closePinModal();
+  });
+
+  function activateNavItem(item) {
+    navItems.forEach((i) => i.classList.remove("active"));
+    item.classList.add("active");
+    Object.values(views).forEach((v) => v.classList.add("hidden"));
+    views[item.dataset.view].classList.remove("hidden");
+    if (item.dataset.view === "history") loadCallHistory();
+    if (item.dataset.view === "sms") {
+      loadSmsLog();
+      loadCallerDirectory();
+    }
+    if (item.dataset.view === "bulk") {
+      loadContacts();
+      loadBulkSmsReport();
+    }
+  }
+
   navItems.forEach((item) => {
     item.addEventListener("click", () => {
-      navItems.forEach((i) => i.classList.remove("active"));
-      item.classList.add("active");
-      Object.values(views).forEach((v) => v.classList.add("hidden"));
-      views[item.dataset.view].classList.remove("hidden");
-      if (item.dataset.view === "history") loadCallHistory();
-      if (item.dataset.view === "sms") {
-        loadSmsLog();
-        loadCallerDirectory();
+      if (item.dataset.view === "sms" && !smsUnlocked) {
+        openPinModal(item);
+        return;
       }
-      if (item.dataset.view === "bulk") loadContacts();
+      activateNavItem(item);
     });
   });
 

@@ -222,6 +222,66 @@ button {
   to { opacity: 1; transform: scale(1); }
 }
 
+/* SMS section PIN gate */
+.pin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 10, 16, 0.72);
+  backdrop-filter: blur(2px);
+}
+.pin-modal.hidden { display: none !important; }
+.pin-modal-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px 36px;
+  width: min(320px, calc(100vw - 32px));
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  animation: popIn 220ms var(--ease-out);
+}
+.pin-modal-icon { font-size: 28px; }
+.pin-modal-card h3 { margin: 0; font-size: 16px; text-align: center; }
+.pin-modal-hint { margin: 0; font-size: 12px; color: var(--muted); text-align: center; }
+.pin-modal-card input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 22px;
+  text-align: center;
+  letter-spacing: 10px;
+  font-family: inherit;
+}
+.pin-modal-card input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.pin-modal-error { color: var(--red); font-size: 12px; text-align: center; min-height: 14px; }
+.pin-modal-actions { display: flex; gap: 10px; width: 100%; margin-top: 6px; }
+.pin-modal-actions button { flex: 1; margin-top: 0; }
+
+.pin-modal-card.shake { animation: pinShake 360ms var(--ease-in-out); }
+@keyframes pinShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
+
 .call-controls { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; justify-content: center; }
 .ctrl-btn {
   padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border);
@@ -478,6 +538,24 @@ button.primary:active:not(:disabled), button.secondary:active:not(:disabled) { t
 }
 .bulk-progress-label { margin-top: 6px; font-size: 11px; color: var(--muted); }
 
+.bulk-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 12px;
+  margin: 16px 0 20px;
+}
+.bulk-stat {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  text-align: center;
+}
+.bulk-stat-value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bulk-stat-value.ok { color: var(--brand); }
+.bulk-stat-value.fail { color: var(--red); }
+.bulk-stat-label { margin-top: 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
 .sms-log-heading { margin-top: 0; }
 
 .call-log-wrap { overflow-x: auto; }
@@ -608,6 +686,8 @@ button.primary:active:not(:disabled), button.secondary:active:not(:disabled) { t
   }
   .pulse-ring { animation: none; opacity: 0.5; }
   .incoming-call-card { animation: none; }
+  .pin-modal-card { animation: none; }
+  .pin-modal-card.shake { animation: none; border-color: var(--red); }
 }
 
 /* ---------------------------------------------------------------------

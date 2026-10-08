@@ -14,12 +14,13 @@ SIP_DISPLAY_NAME = os.environ.get("SIP_DISPLAY_NAME", "Gebeta Technology Trading
 
 COMPANY_NAME = os.environ.get("COMPANY_NAME", "Gebeta Technology Trading plc")
 
-# Which SMS channel /api/sms should actually use: "dongle" (sms_gateway.py,
-# USB AT-command modem), "android" (android_sms_gateway.py, a phone running
-# capcom6/android-sms-gateway), "smpp" (smpp_gateway.py, a real
-# carrier/aggregator account — or the local simulator for testing), or
-# "afromessage" (afromessage_gateway.py, the AfroMessage aggregator — the
-# way to get a custom sender id instead of a SIM's own number).
+# Which SMS channel the single/quick-multi SMS tab (/api/sms) uses:
+# "dongle" (sms_gateway.py, USB AT-command modem), "android"
+# (android_sms_gateway.py, a phone running capcom6/android-sms-gateway), or
+# "smpp" (smpp_gateway.py, a real carrier/aggregator account — or the local
+# simulator for testing). The Bulk SMS tab (/api/bulk-sms) is separate and
+# always uses AfroMessage below, regardless of this setting - "afromessage"
+# is not a valid value here.
 SMS_PROVIDER = os.environ.get("SMS_PROVIDER", "android")
 
 # --- SMS (USB GSM/3G dongle) settings ------------------------------------

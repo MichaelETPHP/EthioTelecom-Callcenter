@@ -23,6 +23,21 @@
     </div>
   </div>
 
+  <!-- SMS section PIN gate -->
+  <div class="pin-modal hidden" id="pinModal" role="dialog" aria-modal="true" aria-label="Enter PIN to access SMS">
+    <div class="pin-modal-card" id="pinModalCard">
+      <div class="pin-modal-icon">🔒</div>
+      <h3>Enter PIN to access SMS</h3>
+      <p class="pin-modal-hint">This section is PIN-protected.</p>
+      <input type="password" id="pinInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••" />
+      <div class="pin-modal-error hidden" id="pinError">Incorrect PIN. Try again.</div>
+      <div class="pin-modal-actions">
+        <button type="button" class="secondary" id="btnPinCancel">Cancel</button>
+        <button type="button" class="primary" id="btnPinSubmit">Unlock</button>
+      </div>
+    </div>
+  </div>
+
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -197,7 +212,9 @@
           <strong>Heads up:</strong> this sends one message to every number below,
           in batches of <span id="bulkBatchSizeLabel">100</span> at a time.
           Both the recipient list and the message are yours to edit — nothing
-          sends until you press <strong>Send bulk SMS</strong>.
+          sends until you press <strong>Send bulk SMS</strong>. The report below
+          shows whether AfroMessage <em>accepted</em> each message — not a
+          carrier delivery receipt.
         </div>
 
         <div class="sms-layout">
@@ -231,6 +248,36 @@
             </div>
             <div class="sms-result" id="bulkResult"></div>
           </div>
+        </div>
+
+        <h3 class="sms-log-heading">Sent &amp; delivered report</h3>
+        <div class="bulk-stats" id="bulkStats">
+          <div class="bulk-stat">
+            <div class="bulk-stat-value" id="bulkStatBatches">0</div>
+            <div class="bulk-stat-label">Batches</div>
+          </div>
+          <div class="bulk-stat">
+            <div class="bulk-stat-value" id="bulkStatRecipients">0</div>
+            <div class="bulk-stat-label">Recipients</div>
+          </div>
+          <div class="bulk-stat">
+            <div class="bulk-stat-value ok" id="bulkStatSent">0</div>
+            <div class="bulk-stat-label">Sent</div>
+          </div>
+          <div class="bulk-stat">
+            <div class="bulk-stat-value fail" id="bulkStatFailed">0</div>
+            <div class="bulk-stat-label">Failed</div>
+          </div>
+        </div>
+        <div class="call-log-wrap">
+          <table class="call-log">
+            <thead>
+              <tr><th>Recipient</th><th>Status</th><th>AfroMessage response</th><th>When</th></tr>
+            </thead>
+            <tbody id="bulkLogBody">
+              <tr><td colspan="4" class="muted">No bulk sends yet.</td></tr>
+            </tbody>
+          </table>
         </div>
       </section>
 

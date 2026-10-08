@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import uuid
 from datetime import datetime
 
 from flask import Flask, g, jsonify, render_template, request
@@ -60,6 +61,20 @@ def init_db():
             message TEXT NOT NULL,
             status TEXT NOT NULL,          -- 'sent' or 'failed'
             detail TEXT,                   -- raw modem response, useful for debugging
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bulk_sms_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id TEXT NOT NULL,        -- groups every recipient from one "Send bulk SMS" click
+            phone TEXT NOT NULL,
+            message TEXT NOT NULL,
+            status TEXT NOT NULL,          -- 'sent' or 'failed' - AfroMessage accepting the
+                                            -- message, not a carrier delivery receipt
+            detail TEXT,                   -- AfroMessage's raw per-recipient response
             created_at TEXT NOT NULL
         )
         """
@@ -169,23 +184,11 @@ def list_sms():
     return jsonify([dict(row) for row in rows])
 
 
-def _send_bulk(to_numbers, message):
-    """Send one message to every number in to_numbers. The android provider
-    batches all recipients into a single gateway request (one message,
-    fanned out server-side). dongle/smpp have no native batch call, so for
-    those this sends once per number and aggregates the results.
-    Returns (success, detail) - success is True only if every send succeeded.
+def _send_one_per_number(to_numbers, message, send_fn, error_cls):
+    """Call send_fn(number, message) once per number and aggregate the
+    results. Returns (success, detail) - success is True only if every
+    send succeeded.
     """
-    if config.SMS_PROVIDER == "android":
-        return android_sms_gateway.send_sms(to_numbers, message)
-
-    providers = {
-        "dongle": (sms_gateway.send_sms, sms_gateway.ModemError),
-        "smpp": (smpp_gateway.send_sms, smpp_gateway.SmppError),
-        "afromessage": (afromessage_gateway.send_sms, afromessage_gateway.AfroMessageError),
-    }
-    send_fn, error_cls = providers.get(config.SMS_PROVIDER, providers["dongle"])
-
     results = []
     all_ok = True
     for number in to_numbers:
@@ -195,13 +198,31 @@ def _send_bulk(to_numbers, message):
             ok, detail = False, str(e)
         all_ok = all_ok and ok
         results.append(f"{number}: {'OK' if ok else 'FAILED'} - {detail}")
-
     return all_ok, "; ".join(results)
 
 
-@app.route("/api/sms", methods=["POST"])
-def send_sms():
-    data = request.get_json(force=True, silent=True) or {}
+def _send_bulk(to_numbers, message):
+    """Single SMS tab only (/api/sms below) - driven by SMS_PROVIDER
+    ("android", "dongle" or "smpp"). Deliberately never routes to
+    AfroMessage: Bulk SMS (send_bulk_sms() / /api/bulk-sms) always uses
+    AfroMessage on its own, regardless of this setting, so the two tabs
+    can use different senders without one setting affecting the other.
+    """
+    if config.SMS_PROVIDER == "android":
+        return android_sms_gateway.send_sms(to_numbers, message)
+
+    providers = {
+        "dongle": (sms_gateway.send_sms, sms_gateway.ModemError),
+        "smpp": (smpp_gateway.send_sms, smpp_gateway.SmppError),
+    }
+    send_fn, error_cls = providers.get(config.SMS_PROVIDER, providers["dongle"])
+    return _send_one_per_number(to_numbers, message, send_fn, error_cls)
+
+
+def _handle_sms_send(data, sender_fn):
+    """Shared validation/logging for both /api/sms and /api/bulk-sms.
+    sender_fn(to_numbers, message) -> (success, detail).
+    """
     to_field = data.get("to")
     to_numbers = to_field if isinstance(to_field, list) else [to_field]
     to_numbers = [n.strip() for n in to_numbers if n and n.strip()]
@@ -216,9 +237,14 @@ def send_sms():
 
     db = get_db()
     try:
-        success, detail = _send_bulk(to_numbers, message)
+        success, detail = sender_fn(to_numbers, message)
         status = "sent" if success else "failed"
-    except (android_sms_gateway.AndroidGatewayError, sms_gateway.ModemError, smpp_gateway.SmppError) as e:
+    except (
+        android_sms_gateway.AndroidGatewayError,
+        sms_gateway.ModemError,
+        smpp_gateway.SmppError,
+        afromessage_gateway.AfroMessageError,
+    ) as e:
         success = False
         status = "failed"
         detail = str(e)
@@ -238,6 +264,91 @@ def send_sms():
         "detail": detail,
         "recipientCount": len(to_numbers),
     }), (201 if success else 502)
+
+
+@app.route("/api/sms", methods=["POST"])
+def send_sms():
+    """Single/quick-multi SMS tab. Never uses AfroMessage - see _send_bulk."""
+    data = request.get_json(force=True, silent=True) or {}
+    return _handle_sms_send(data, _send_bulk)
+
+
+@app.route("/api/bulk-sms", methods=["POST"])
+def send_bulk_sms():
+    """Bulk SMS tab. Always uses AfroMessage, regardless of SMS_PROVIDER.
+    Unlike /api/sms, this logs one row per recipient (bulk_sms_log, not
+    sms_log) so the Bulk SMS report can count sends per job. A "Send bulk
+    SMS" click may call this once per batch (SMS_BULK_MAX_RECIPIENTS cap) -
+    the client passes the same batchId on every call so all of them are
+    counted as one job in the report.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    to_field = data.get("to")
+    to_numbers = to_field if isinstance(to_field, list) else [to_field]
+    to_numbers = [n.strip() for n in to_numbers if n and n.strip()]
+    message = (data.get("message") or "").strip()
+    batch_id = (data.get("batchId") or "").strip() or uuid.uuid4().hex
+
+    if not to_numbers or not message:
+        return jsonify({"error": "At least one recipient and a message are required"}), 400
+    if len(to_numbers) > config.SMS_BULK_MAX_RECIPIENTS:
+        return jsonify({
+            "error": f"Too many recipients ({len(to_numbers)}). Max is {config.SMS_BULK_MAX_RECIPIENTS} per send."
+        }), 400
+
+    db = get_db()
+    now = datetime.utcnow().isoformat()
+    sent_count = 0
+    for number in to_numbers:
+        try:
+            ok, detail = afromessage_gateway.send_sms(number, message)
+        except afromessage_gateway.AfroMessageError as e:
+            ok, detail = False, str(e)
+        if ok:
+            sent_count += 1
+        db.execute(
+            """
+            INSERT INTO bulk_sms_log (batch_id, phone, message, status, detail, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (batch_id, number, message, "sent" if ok else "failed", detail, now),
+        )
+    db.commit()
+
+    failed_count = len(to_numbers) - sent_count
+    http_status = 201 if failed_count == 0 else (502 if sent_count == 0 else 207)
+    return jsonify({
+        "batchId": batch_id,
+        "recipientCount": len(to_numbers),
+        "sentCount": sent_count,
+        "failedCount": failed_count,
+    }), http_status
+
+
+# ---------------------------------------------------------------------------
+# API: Bulk SMS report (per-recipient log + running totals)
+# ---------------------------------------------------------------------------
+@app.route("/api/bulk-sms/log", methods=["GET"])
+def list_bulk_sms_log():
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM bulk_sms_log ORDER BY id DESC LIMIT 500"
+    ).fetchall()
+    totals = db.execute(
+        """
+        SELECT
+            COUNT(*) AS recipients,
+            SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
+            COUNT(DISTINCT batch_id) AS batches
+        FROM bulk_sms_log
+        """
+    ).fetchone()
+    return jsonify({
+        "rows": [dict(row) for row in rows],
+        "totals": dict(totals) if totals and totals["recipients"] else
+            {"recipients": 0, "sent": 0, "failed": 0, "batches": 0},
+    })
 
 
 if __name__ == "__main__":
