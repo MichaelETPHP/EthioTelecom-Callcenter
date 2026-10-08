@@ -321,6 +321,21 @@ button {
 .picker-row input { accent-color: var(--brand); cursor: pointer; flex-shrink: 0; }
 .picker-row .picker-number { flex: 1; }
 .picker-row .picker-when { color: var(--muted); font-size: 11px; }
+.picker-row.invalid-row .picker-number { color: var(--red); }
+
+.picker-add-btn {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--brand);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 160ms var(--ease-out), background-color 150ms ease, border-color 150ms ease;
+}
+.picker-add-btn:hover { border-color: var(--brand); background: var(--brand-soft); }
+.picker-add-btn:active { transform: scale(0.95); }
 
 button.secondary {
   width: 100%;
@@ -437,9 +452,31 @@ button.primary {
   font-weight: 600; border-radius: 10px; padding: 12px; border: 1px solid var(--brand); cursor: pointer;
   min-height: 44px;
 }
+button.primary, button.secondary {
+  transition: transform 160ms var(--ease-out), background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+button.primary:active:not(:disabled), button.secondary:active:not(:disabled) { transform: scale(0.97); }
+
 .sms-result { margin-top: 12px; font-size: 13px; min-height: 18px; }
 .sms-result.ok { color: var(--brand); }
 .sms-result.fail { color: var(--red); }
+
+.bulk-progress { margin-top: 14px; }
+.bulk-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.bulk-progress-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--brand);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 220ms var(--ease-out);
+}
+.bulk-progress-label { margin-top: 6px; font-size: 11px; color: var(--muted); }
 
 .sms-log-heading { margin-top: 0; }
 

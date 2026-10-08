@@ -57,6 +57,7 @@
       <nav class="nav">
         <button class="nav-item active" data-view="phone">☎ Phone</button>
         <button class="nav-item" data-view="sms">✉ SMS</button>
+        <button class="nav-item" data-view="bulk">📨 Bulk SMS</button>
         <button class="nav-item" data-view="history">🕘 Call History</button>
         <button class="nav-item" data-view="developers">&lt;/&gt; Developers</button>
       </nav>
@@ -186,6 +187,50 @@
               <tr><td colspan="4" class="muted">No messages sent yet.</td></tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <!-- Bulk SMS view -->
+      <section class="view hidden" id="view-bulk">
+        <h2>Bulk SMS</h2>
+        <div class="sms-notice">
+          <strong>Heads up:</strong> this sends one message to every number below,
+          in batches of <span id="bulkBatchSizeLabel">100</span> at a time.
+          Both the recipient list and the message are yours to edit — nothing
+          sends until you press <strong>Send bulk SMS</strong>.
+        </div>
+
+        <div class="sms-layout">
+          <div class="sms-picker card">
+            <div class="field-row">
+              <label class="field-label" for="bulkContactsFilter">Saved contacts</label>
+              <span class="recipient-count" id="bulkContactsCount"></span>
+            </div>
+            <input type="text" id="bulkContactsFilter" placeholder="Filter by number…" autocomplete="off" />
+            <div class="picker-list" id="bulkContactsList">
+              <div class="muted picker-empty">Loading…</div>
+            </div>
+            <button id="btnBulkLoadAll" class="secondary full-width">Load all into recipients</button>
+          </div>
+
+          <div class="sms-compose card">
+            <div class="field-row">
+              <label class="field-label" for="bulkTo">Recipients</label>
+              <span class="recipient-count hidden" id="bulkRecipientCount"></span>
+            </div>
+            <textarea id="bulkTo" rows="6" placeholder="One number per line, or comma-separated — or load from saved contacts on the left"></textarea>
+
+            <label class="field-label" for="bulkMessage">Message</label>
+            <textarea id="bulkMessage" rows="5" maxlength="1000" placeholder="Type the message to send to everyone…"></textarea>
+            <div class="sms-counter"><span id="bulkCharCount">0</span> characters</div>
+
+            <button id="btnSendBulkSms" class="primary full-width">Send bulk SMS</button>
+            <div class="bulk-progress hidden" id="bulkProgress">
+              <div class="bulk-progress-track"><div class="bulk-progress-fill" id="bulkProgressFill"></div></div>
+              <div class="bulk-progress-label" id="bulkProgressLabel"></div>
+            </div>
+            <div class="sms-result" id="bulkResult"></div>
+          </div>
         </div>
       </section>
 

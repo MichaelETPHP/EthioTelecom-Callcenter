@@ -47,6 +47,7 @@
   const views = {
     phone: $("view-phone"),
     sms: $("view-sms"),
+    bulk: $("view-bulk"),
     history: $("view-history"),
     developers: $("view-developers"),
   };
@@ -66,6 +67,22 @@
   const pickerListEl = $("pickerList");
   const pickerSelectAllEl = $("pickerSelectAll");
   const btnAddSelected = $("btnAddSelected");
+
+  const bulkBatchSizeLabelEl = $("bulkBatchSizeLabel");
+  const bulkContactsFilterEl = $("bulkContactsFilter");
+  const bulkContactsListEl = $("bulkContactsList");
+  const bulkContactsCountEl = $("bulkContactsCount");
+  const btnBulkLoadAll = $("btnBulkLoadAll");
+  const bulkToEl = $("bulkTo");
+  const bulkRecipientCountEl = $("bulkRecipientCount");
+  const bulkMessageEl = $("bulkMessage");
+  const bulkCharCountEl = $("bulkCharCount");
+  const btnSendBulkSms = $("btnSendBulkSms");
+  const bulkResultEl = $("bulkResult");
+  const bulkProgressEl = $("bulkProgress");
+  const bulkProgressFillEl = $("bulkProgressFill");
+  const bulkProgressLabelEl = $("bulkProgressLabel");
+
   const developerView = $("view-developers");
   const developerApiBaseEl = $("developerApiBase");
   const developerMobileBaseEl = $("developerMobileBase");
@@ -84,6 +101,8 @@
   let ringtoneNodes = null;
   let sessionDirection = null; // 'inbound' | 'outbound'
   let sessionPeer = null;
+  let savedContacts = []; // [{id, name, phone, valid}], from /api/contacts
+  let smsBulkMaxRecipients = 100; // overwritten from /api/config once it loads
 
   function initializeDeveloperDocs() {
     if (!developerView) return;
@@ -702,6 +721,192 @@
   }
 
   // ---------------------------------------------------------------------
+  // Bulk SMS — same message to a large, freely-editable list of numbers.
+  // Recipients and message both stay plain-text/editable right up until
+  // Send; "saved contacts" only ever adds to that list, never locks it.
+  // ---------------------------------------------------------------------
+  async function loadContacts() {
+    try {
+      const res = await fetch("api/contacts");
+      savedContacts = await res.json();
+    } catch (e) {
+      console.warn("Failed to load saved contacts", e);
+      savedContacts = [];
+    }
+    renderContactsPicker();
+  }
+
+  function renderContactsPicker() {
+    const filter = bulkContactsFilterEl.value.trim().toLowerCase();
+    const visible = filter
+      ? savedContacts.filter((c) => c.phone.toLowerCase().includes(filter))
+      : savedContacts;
+
+    bulkContactsCountEl.textContent = savedContacts.length ? `${savedContacts.length} saved` : "";
+
+    if (!savedContacts.length) {
+      bulkContactsListEl.innerHTML = `<div class="muted picker-empty">No saved contacts yet.</div>`;
+      return;
+    }
+    if (!visible.length) {
+      bulkContactsListEl.innerHTML = `<div class="muted picker-empty">No matches.</div>`;
+      return;
+    }
+
+    bulkContactsListEl.innerHTML = "";
+    visible.forEach((c) => {
+      const row = document.createElement("div");
+      row.className = c.valid ? "picker-row" : "picker-row invalid-row";
+
+      const number = document.createElement("span");
+      number.className = "picker-number";
+      number.textContent = c.name ? `${c.name} — ${c.phone}` : c.phone;
+
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "picker-add-btn";
+      addBtn.textContent = "+ Add";
+      addBtn.addEventListener("click", () => addNumbersToBulkRecipients([c.phone]));
+
+      row.append(number, addBtn);
+      bulkContactsListEl.appendChild(row);
+    });
+  }
+
+  function addNumbersToBulkRecipients(phones) {
+    const existing = bulkToEl.value
+      .split(/[,;\n]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const merged = new Set(existing);
+    phones.forEach((p) => merged.add(p));
+    bulkToEl.value = Array.from(merged).join("\n");
+    renderBulkRecipientSummary();
+  }
+
+  function parseBulkRecipients() {
+    const tokens = bulkToEl.value
+      .split(/[,;\n]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const seen = new Set();
+    const recipients = [];
+    for (const token of tokens) {
+      const parsed = normalizeEthiopianNumber(token);
+      const key = parsed.valid ? parsed.e164 : `!${parsed.raw}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      recipients.push(parsed);
+    }
+    return recipients;
+  }
+
+  function renderBulkRecipientSummary() {
+    const recipients = parseBulkRecipients();
+    const validCount = recipients.filter((r) => r.valid).length;
+    const invalidCount = recipients.length - validCount;
+
+    bulkRecipientCountEl.classList.toggle("hidden", recipients.length === 0);
+    bulkRecipientCountEl.classList.toggle("has-invalid", invalidCount > 0);
+    bulkRecipientCountEl.textContent =
+      invalidCount > 0
+        ? `${validCount} valid • ${invalidCount} invalid`
+        : `${validCount} recipient${validCount === 1 ? "" : "s"}`;
+
+    btnSendBulkSms.textContent = validCount > 0 ? `Send bulk SMS to ${validCount}` : "Send bulk SMS";
+    return recipients;
+  }
+
+  function setBulkResult(message, ok) {
+    bulkResultEl.textContent = message;
+    bulkResultEl.className = `sms-result ${ok ? "ok" : "fail"}`;
+  }
+
+  function chunkArray(items, size) {
+    const chunks = [];
+    for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+    return chunks;
+  }
+
+  if (bulkToEl) bulkToEl.addEventListener("input", renderBulkRecipientSummary);
+  if (bulkContactsFilterEl) bulkContactsFilterEl.addEventListener("input", renderContactsPicker);
+
+  if (btnBulkLoadAll) {
+    btnBulkLoadAll.addEventListener("click", () => {
+      addNumbersToBulkRecipients(savedContacts.filter((c) => c.valid).map((c) => c.phone));
+    });
+  }
+
+  if (bulkMessageEl) {
+    bulkMessageEl.addEventListener("input", () => {
+      bulkCharCountEl.textContent = bulkMessageEl.value.length;
+    });
+  }
+
+  if (btnSendBulkSms) {
+    btnSendBulkSms.addEventListener("click", async () => {
+      const recipients = parseBulkRecipients();
+      const validNumbers = recipients.filter((r) => r.valid).map((r) => r.e164);
+      const invalidCount = recipients.length - validNumbers.length;
+      const message = bulkMessageEl.value.trim();
+
+      if (!validNumbers.length || !message) {
+        setBulkResult("Add at least one valid number and a message.", false);
+        return;
+      }
+      if (invalidCount > 0) {
+        setBulkResult(`Fix or remove ${invalidCount} invalid number(s) first.`, false);
+        return;
+      }
+
+      const batches = chunkArray(validNumbers, smsBulkMaxRecipients);
+      btnSendBulkSms.disabled = true;
+      bulkProgressEl.classList.remove("hidden");
+      bulkProgressFillEl.style.transform = "scaleX(0)";
+      setBulkResult("", true);
+
+      let sentCount = 0;
+      let failedBatches = 0;
+      for (let i = 0; i < batches.length; i++) {
+        bulkProgressLabelEl.textContent = `Sending batch ${i + 1} of ${batches.length} (${batches[i].length} numbers)…`;
+        try {
+          const res = await fetch("api/sms", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ to: batches[i], message }),
+          });
+          const data = await res.json();
+          if (res.ok && data.status === "sent") {
+            sentCount += batches[i].length;
+          } else {
+            failedBatches += 1;
+          }
+        } catch (e) {
+          failedBatches += 1;
+        }
+        bulkProgressFillEl.style.transform = `scaleX(${(i + 1) / batches.length})`;
+      }
+      bulkProgressLabelEl.textContent = "Done.";
+
+      if (failedBatches === 0) {
+        setBulkResult(
+          `Sent to ${sentCount} recipients across ${batches.length} batch${batches.length === 1 ? "" : "es"}.`,
+          true
+        );
+      } else {
+        setBulkResult(
+          `Sent to ${sentCount} recipients, but ${failedBatches} of ${batches.length} batch(es) failed — check the SMS tab's log for details.`,
+          false
+        );
+      }
+
+      btnSendBulkSms.disabled = false;
+      setTimeout(() => bulkProgressEl.classList.add("hidden"), 1500);
+    });
+  }
+
+  // ---------------------------------------------------------------------
   // DTMF pad
   // ---------------------------------------------------------------------
   function buildDtmfPad() {
@@ -893,6 +1098,10 @@
 
     serverLabelEl.textContent = cfg.server;
     if (smsSenderLabelEl) smsSenderLabelEl.textContent = cfg.smsSenderLabel;
+    if (cfg.smsBulkMaxRecipients) {
+      smsBulkMaxRecipients = cfg.smsBulkMaxRecipients;
+      if (bulkBatchSizeLabelEl) bulkBatchSizeLabelEl.textContent = smsBulkMaxRecipients;
+    }
 
     const socket = new JsSIP.WebSocketInterface(cfg.wsUrl);
     ua = new JsSIP.UA({
@@ -1051,6 +1260,7 @@
         loadSmsLog();
         loadCallerDirectory();
       }
+      if (item.dataset.view === "bulk") loadContacts();
     });
   });
 

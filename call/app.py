@@ -1,9 +1,11 @@
+import json
 import sqlite3
 from datetime import datetime
 
 from flask import Flask, g, jsonify, render_template, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+import afromessage_gateway
 import android_sms_gateway
 import config
 import sms_gateway
@@ -101,8 +103,22 @@ def api_config():
             "companyName": config.COMPANY_NAME,
             "server": config.SIP_SERVER,
             "smsSenderLabel": config.SMS_SENDER_LABEL,
+            "smsBulkMaxRecipients": config.SMS_BULK_MAX_RECIPIENTS,
         }
     )
+
+
+# ---------------------------------------------------------------------------
+# API: saved contacts (Bulk SMS tab's "saved contacts" picker)
+# ---------------------------------------------------------------------------
+@app.route("/api/contacts", methods=["GET"])
+def list_contacts():
+    try:
+        with open(config.CONTACTS_FILE, "r", encoding="utf-8") as f:
+            contacts = json.load(f)
+    except (FileNotFoundError, ValueError):
+        contacts = []
+    return jsonify(contacts)
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +182,7 @@ def _send_bulk(to_numbers, message):
     providers = {
         "dongle": (sms_gateway.send_sms, sms_gateway.ModemError),
         "smpp": (smpp_gateway.send_sms, smpp_gateway.SmppError),
+        "afromessage": (afromessage_gateway.send_sms, afromessage_gateway.AfroMessageError),
     }
     send_fn, error_cls = providers.get(config.SMS_PROVIDER, providers["dongle"])
 

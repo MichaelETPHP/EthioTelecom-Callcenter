@@ -16,8 +16,10 @@ COMPANY_NAME = os.environ.get("COMPANY_NAME", "Gebeta Technology Trading plc")
 
 # Which SMS channel /api/sms should actually use: "dongle" (sms_gateway.py,
 # USB AT-command modem), "android" (android_sms_gateway.py, a phone running
-# capcom6/android-sms-gateway), or "smpp" (smpp_gateway.py, a real
-# carrier/aggregator account — or the local simulator for testing).
+# capcom6/android-sms-gateway), "smpp" (smpp_gateway.py, a real
+# carrier/aggregator account — or the local simulator for testing), or
+# "afromessage" (afromessage_gateway.py, the AfroMessage aggregator — the
+# way to get a custom sender id instead of a SIM's own number).
 SMS_PROVIDER = os.environ.get("SMS_PROVIDER", "android")
 
 # --- SMS (USB GSM/3G dongle) settings ------------------------------------
@@ -52,6 +54,27 @@ SMPP_SOURCE_ADDR = os.environ.get("SMPP_SOURCE_ADDR", SMS_SENDER_LABEL)
 ANDROID_SMS_GATEWAY_URL = os.environ.get("ANDROID_SMS_GATEWAY_URL", "")
 ANDROID_SMS_GATEWAY_USERNAME = os.environ.get("ANDROID_SMS_GATEWAY_USERNAME", "")
 ANDROID_SMS_GATEWAY_PASSWORD = os.environ.get("ANDROID_SMS_GATEWAY_PASSWORD", "")
+
+# --- AfroMessage (https://afromessage.com) ---------------------------------
+# An Ethiopian SMS aggregator — get AFROMESSAGE_API_KEY (a Bearer token)
+# from your AfroMessage dashboard under API Keys.
+AFROMESSAGE_API_URL = os.environ.get("AFROMESSAGE_API_URL", "https://api.afromessage.com/api/send")
+AFROMESSAGE_API_KEY = os.environ.get("AFROMESSAGE_API_KEY", "")
+# The registered Sender ID/name recipients see (AfroMessage's "sender" param
+# — e.g. "Gebeta Tech", "CityBird", "BahirDar").
+AFROMESSAGE_IDENTIFIER = os.environ.get("AFROMESSAGE_IDENTIFIER", "")
+# Optional "from" id (AfroMessage's "from" param) some multi-sender plans
+# need alongside AFROMESSAGE_IDENTIFIER — leave blank if your plan only
+# uses the one sender identifier above.
+AFROMESSAGE_FROM = os.environ.get("AFROMESSAGE_FROM", "")
+
+# Saved contacts list for the Bulk SMS tab (data/contacts.json — an array of
+# {id, name, phone, valid}), converted from a one-number-per-line text
+# export. Not a carrier concern, just where the Bulk SMS UI's "saved
+# contacts" picker reads from.
+CONTACTS_FILE = os.environ.get(
+    "CONTACTS_FILE", os.path.join(os.path.dirname(__file__), "data", "contacts.json")
+)
 
 # Public URLs shown in the developer documentation. Keep these free of
 # credentials. If the API URL is empty, the browser uses /sms-api on the
