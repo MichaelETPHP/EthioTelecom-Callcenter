@@ -203,20 +203,24 @@ def _send_one_per_number(to_numbers, message, send_fn, error_cls):
 
 def _send_bulk(to_numbers, message):
     """Single SMS tab only (/api/sms below) - driven by SMS_PROVIDER
-    ("android", "dongle" or "smpp"). Deliberately never routes to
+    ("android"/SMSGate, "dongle" or "smpp"). Deliberately never routes to
     AfroMessage: Bulk SMS (send_bulk_sms() / /api/bulk-sms) always uses
     AfroMessage on its own, regardless of this setting, so the two tabs
     can use different senders without one setting affecting the other.
-    """
-    if config.SMS_PROVIDER == "android":
-        return android_sms_gateway.send_sms(to_numbers, message)
 
-    providers = {
-        "dongle": (sms_gateway.send_sms, sms_gateway.ModemError),
-        "smpp": (smpp_gateway.send_sms, smpp_gateway.SmppError),
-    }
-    send_fn, error_cls = providers.get(config.SMS_PROVIDER, providers["dongle"])
-    return _send_one_per_number(to_numbers, message, send_fn, error_cls)
+    "dongle" and "smpp" are explicit opt-ins only, since they depend on
+    real hardware/carrier hookups that may not be present. Anything else -
+    including the unset default, and a stale/invalid value such as a
+    leftover "afromessage" from before the two tabs were split - falls
+    back to "android" (SMSGate), the supported no-hardware provider, so a
+    misconfigured SMS_PROVIDER never silently lands on a disconnected USB
+    modem (see sms_gateway.py's AT+CMGF errors) instead of just working.
+    """
+    if config.SMS_PROVIDER == "dongle":
+        return _send_one_per_number(to_numbers, message, sms_gateway.send_sms, sms_gateway.ModemError)
+    if config.SMS_PROVIDER == "smpp":
+        return _send_one_per_number(to_numbers, message, smpp_gateway.send_sms, smpp_gateway.SmppError)
+    return android_sms_gateway.send_sms(to_numbers, message)
 
 
 def _handle_sms_send(data, sender_fn):
