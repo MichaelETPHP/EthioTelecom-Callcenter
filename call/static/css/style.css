@@ -92,12 +92,27 @@ button {
   display: flex; align-items: center; gap: 12px;
 }
 .agent-avatar {
-  width: 40px; height: 40px; border-radius: 50%;
+  width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
   background: var(--brand); display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700; color: #10240a;
 }
-.agent-name { font-size: 13px; font-weight: 600; }
+.agent-meta { flex: 1; min-width: 0; }
+.agent-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+
+.agent-switch-btn {
+  flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--panel);
+  color: var(--muted); font-size: 14px; cursor: pointer;
+  transition: transform 160ms var(--ease-out), color 150ms ease, border-color 150ms ease;
+}
+.agent-switch-btn:hover { color: var(--brand); border-color: var(--brand); }
+.agent-switch-btn:active { transform: scale(0.92); }
+
+.agent-picker-card { width: min(360px, calc(100vw - 32px)); }
+.agent-picker-list { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 6px; }
+.agent-picker-list button { margin-top: 0; }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .dot-gray { background: var(--muted); }

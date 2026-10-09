@@ -104,21 +104,56 @@ def index():
 
 
 # ---------------------------------------------------------------------------
+# API: agent seats (call-hunting across multiple devices/extensions)
+# ---------------------------------------------------------------------------
+@app.route("/api/agents")
+def list_agents():
+    """Seat id/label/displayName only - no SIP credentials. The browser
+    picks one of these (see the Agent picker), then calls
+    /api/config?agent=<id> to get that seat's actual sign-in details.
+    """
+    return jsonify(
+        {
+            "seats": [
+                {"id": s["id"], "label": s["label"], "displayName": s["displayName"]}
+                for s in config.AGENT_SEATS
+            ],
+            "callHuntTimeoutSeconds": config.CALL_HUNT_TIMEOUT_SECONDS,
+            "sipDomain": config.SIP_DOMAIN,
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
 # API: SIP registration config consumed by the browser softphone
 # ---------------------------------------------------------------------------
 @app.route("/api/config")
 def api_config():
+    agent_id = request.args.get("agent")
+    seat = next((s for s in config.AGENT_SEATS if s["id"] == agent_id), None)
+    if seat is None:
+        # No/unknown seat requested - fall back to the first configured
+        # seat so existing single-extension setups keep working unchanged.
+        seat = config.AGENT_SEATS[0] if config.AGENT_SEATS else None
+
+    username = seat["username"] if seat else config.SIP_USERNAME
+    password = seat["password"] if seat else config.SIP_PASSWORD
+    display_name = seat["displayName"] if seat else config.SIP_DISPLAY_NAME
+
     return jsonify(
         {
             "wsUrl": config.SIP_WS_URL,
-            "sipUri": f"sip:{config.SIP_USERNAME}@{config.SIP_DOMAIN}",
-            "authUser": config.SIP_USERNAME,
-            "password": config.SIP_PASSWORD,
-            "displayName": config.SIP_DISPLAY_NAME,
+            "sipUri": f"sip:{username}@{config.SIP_DOMAIN}",
+            "sipDomain": config.SIP_DOMAIN,
+            "authUser": username,
+            "password": password,
+            "displayName": display_name,
+            "agentId": seat["id"] if seat else None,
             "companyName": config.COMPANY_NAME,
             "server": config.SIP_SERVER,
             "smsSenderLabel": config.SMS_SENDER_LABEL,
             "smsBulkMaxRecipients": config.SMS_BULK_MAX_RECIPIENTS,
+            "callHuntTimeoutSeconds": config.CALL_HUNT_TIMEOUT_SECONDS,
         }
     )
 

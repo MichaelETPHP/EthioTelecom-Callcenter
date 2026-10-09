@@ -9,6 +9,11 @@
   const regStatusEl = $("regStatus");
   const serverLabelEl = $("serverLabel");
   const remoteAudio = $("remoteAudio");
+  const agentAvatarEl = $("agentAvatar");
+  const agentNameEl = $("agentName");
+  const btnSwitchAgent = $("btnSwitchAgent");
+  const agentPickerModal = $("agentPickerModal");
+  const agentPickerList = $("agentPickerList");
 
   const stageIdle = $("stageIdle");
   const stageIncoming = $("stageIncoming");
@@ -118,6 +123,14 @@
   let smsUnlocked = false; // gates the ✉ SMS nav tab behind a PIN for this page load
   let pendingNavItem = null; // the nav item we'll actually activate once the PIN is correct
   const SMS_SECTION_PIN = "9876"; // default PIN; client-side gate only, not real security
+
+  // Call hunting across multiple agent seats (Call Center section).
+  let agentSeats = []; // [{id, label, displayName, username}], from /api/agents
+  let sipDomain = ""; // for building sip:<user>@<domain> redirect targets
+  let callHuntTimeoutSeconds = 20; // overwritten from /api/agents once it loads
+  let currentAgentId = null; // which seat this device is connected as
+  let huntTimer = null; // pending "give up and hand off" timer for the ringing call
+  const AGENT_SEAT_STORAGE_KEY = "callConsoleAgentId";
 
   function initializeDeveloperDocs() {
     if (!developerView) return;
@@ -1089,6 +1102,7 @@
     });
 
     session.on("accepted", () => {
+      clearHuntTimer();
       stopRingtone();
       hideIncomingCallAlert();
       remoteAudio.play().catch(() => {});
@@ -1098,6 +1112,7 @@
     });
 
     session.on("confirmed", () => {
+      clearHuntTimer();
       stopRingtone();
       hideIncomingCallAlert();
       remoteAudio.play().catch(() => {});
@@ -1107,6 +1122,7 @@
     });
 
     session.on("failed", (e) => {
+      clearHuntTimer();
       stopRingtone();
       hideIncomingCallAlert();
       const elapsed = stopTimer();
@@ -1116,6 +1132,7 @@
     });
 
     session.on("ended", () => {
+      clearHuntTimer();
       stopRingtone();
       hideIncomingCallAlert();
       const elapsed = stopTimer();
@@ -1128,6 +1145,7 @@
     currentSession = null;
     sessionDirection = null;
     sessionPeer = null;
+    clearHuntTimer();
     hideIncomingCallAlert();
     dtmfPad.classList.add("hidden");
     btnMute.classList.remove("active-state");
@@ -1138,14 +1156,130 @@
   }
 
   // ---------------------------------------------------------------------
+  // Call hunting across multiple agent seats — each seat is its own SIP
+  // extension on the same PBX. A device picks one seat (see the Agent
+  // picker below); if that seat doesn't answer an incoming call within
+  // callHuntTimeoutSeconds, or explicitly declines it, this sends a SIP
+  // redirect (302) at the next seat in line, looping back to the first
+  // after the last. This is best-effort: whether telecontactcenter.et
+  // actually re-INVITEs the redirect target is up to that server, not
+  // something this browser client can guarantee.
+  // ---------------------------------------------------------------------
+  function nextAgentSeat() {
+    if (agentSeats.length < 2) return null;
+    const idx = agentSeats.findIndex((s) => s.id === currentAgentId);
+    return agentSeats[(idx === -1 ? 0 : idx + 1) % agentSeats.length];
+  }
+
+  function startHuntTimer(session, peer) {
+    clearHuntTimer();
+    huntTimer = setTimeout(() => handOffIncomingCall(session, peer, "timeout"), callHuntTimeoutSeconds * 1000);
+  }
+
+  function clearHuntTimer() {
+    if (huntTimer) {
+      clearTimeout(huntTimer);
+      huntTimer = null;
+    }
+  }
+
+  function handOffIncomingCall(session, peer, reason) {
+    clearHuntTimer();
+    stopRingtone();
+    hideIncomingCallAlert();
+    const next = nextAgentSeat();
+    if (next) {
+      session.terminate({
+        status_code: 302,
+        reason_phrase: "Moved Temporarily",
+        extraHeaders: [`Contact: <sip:${next.username}@${sipDomain}>`],
+      });
+      logCall("inbound", peer, reason === "timeout" ? "hunt-timeout" : "hunt-declined", 0);
+    } else {
+      session.terminate();
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Agent seat picker
+  // ---------------------------------------------------------------------
+  function updateAgentCard(cfg) {
+    currentAgentId = cfg.agentId || null;
+    const seat = agentSeats.find((s) => s.id === currentAgentId);
+    agentAvatarEl.textContent = cfg.authUser || "—";
+    agentNameEl.textContent = seat ? `${seat.label} · ${cfg.authUser}` : `Agent ${cfg.authUser}`;
+    btnSwitchAgent.classList.toggle("hidden", agentSeats.length < 2);
+  }
+
+  function showAgentPicker() {
+    agentPickerList.innerHTML = "";
+    agentSeats.forEach((seat) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "secondary full-width";
+      btn.textContent = seat.label;
+      btn.addEventListener("click", () => {
+        localStorage.setItem(AGENT_SEAT_STORAGE_KEY, seat.id);
+        agentPickerModal.classList.add("hidden");
+        connectAsAgent(seat.id);
+      });
+      agentPickerList.appendChild(btn);
+    });
+    agentPickerModal.classList.remove("hidden");
+  }
+
+  if (btnSwitchAgent) {
+    btnSwitchAgent.addEventListener("click", () => {
+      if (currentSession) {
+        setRegStatus("bad", "Finish or hang up the current call before switching seats");
+        return;
+      }
+      if (agentSeats.length < 2) return;
+      showAgentPicker();
+    });
+  }
+
+  async function loadAgentsAndConnect() {
+    try {
+      const res = await fetch("api/agents");
+      const data = await res.json();
+      agentSeats = data.seats || [];
+      sipDomain = data.sipDomain || "";
+      callHuntTimeoutSeconds = data.callHuntTimeoutSeconds || 20;
+    } catch (e) {
+      console.warn("Failed to load agent seats", e);
+      agentSeats = [];
+    }
+
+    if (agentSeats.length < 2) {
+      connectAsAgent(agentSeats[0] ? agentSeats[0].id : null);
+      return;
+    }
+
+    const saved = localStorage.getItem(AGENT_SEAT_STORAGE_KEY);
+    const savedSeat = agentSeats.find((s) => s.id === saved);
+    if (savedSeat) {
+      connectAsAgent(savedSeat.id);
+    } else {
+      showAgentPicker();
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // JsSIP UA setup
   // ---------------------------------------------------------------------
-  async function initSip() {
+  async function connectAsAgent(agentId) {
     if (new URLSearchParams(location.search).get("debug") === "1") {
       JsSIP.debug.enable("JsSIP:*");
     }
 
-    const res = await fetch("api/config");
+    if (ua) {
+      ua.stop(); // tear down the previous seat's registration before switching
+    }
+    resetToIdle();
+
+    const query = agentId ? `?agent=${encodeURIComponent(agentId)}` : "";
+    const res = await fetch(`api/config${query}`);
     const cfg = await res.json();
 
     serverLabelEl.textContent = cfg.server;
@@ -1154,6 +1288,7 @@
       smsBulkMaxRecipients = cfg.smsBulkMaxRecipients;
       if (bulkBatchSizeLabelEl) bulkBatchSizeLabelEl.textContent = smsBulkMaxRecipients;
     }
+    updateAgentCard(cfg);
 
     const socket = new JsSIP.WebSocketInterface(cfg.wsUrl);
     ua = new JsSIP.UA({
@@ -1179,17 +1314,21 @@
       const session = data.session;
 
       if (data.originator === "remote") {
-        // Incoming call
+        const peer = resolveCallerId(data.request, session);
+
         if (currentSession) {
-          // Already on a call: politely reject the new one.
-          session.terminate();
+          // Already on a call: hand this one off instead of just rejecting
+          // it, so a busy seat doesn't dead-end the hunt.
+          handOffIncomingCall(session, peer, "declined");
           return;
         }
-        const peer = resolveCallerId(data.request, session);
+
         attachSessionHandlers(session, "inbound", peer);
         showIncomingCallAlert(peer);
+        startHuntTimer(session, peer);
 
         const acceptCall = () => {
+          clearHuntTimer();
           stopRingtone();
           hideIncomingCallAlert();
           session.answer({
@@ -1197,11 +1336,7 @@
             pcConfig: { iceServers: ICE_SERVERS },
           });
         };
-        const rejectCall = () => {
-          stopRingtone();
-          hideIncomingCallAlert();
-          session.terminate();
-        };
+        const rejectCall = () => handOffIncomingCall(session, peer, "declined");
 
         btnAccept.onclick = acceptCall;
         btnReject.onclick = rejectCall;
@@ -1383,7 +1518,7 @@
   // ---------------------------------------------------------------------
   setStage("idle");
   initializeDeveloperDocs();
-  initSip().catch((e) => {
+  loadAgentsAndConnect().catch((e) => {
     console.error(e);
     setRegStatus("bad", `Setup failed: ${e.message || e}`);
   });

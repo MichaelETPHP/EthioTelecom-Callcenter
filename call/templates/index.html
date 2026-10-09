@@ -38,6 +38,19 @@
     </div>
   </div>
 
+  <!-- Agent seat picker (call hunting across multiple devices/extensions) -->
+  <div class="pin-modal hidden" id="agentPickerModal" role="dialog" aria-modal="true" aria-label="Choose agent seat">
+    <div class="pin-modal-card agent-picker-card">
+      <div class="pin-modal-icon">🎧</div>
+      <h3>Which seat is this device?</h3>
+      <p class="pin-modal-hint">
+        An incoming call rings one seat at a time; if it's not answered in
+        time it hands off to the next seat, looping back to the first.
+      </p>
+      <div class="agent-picker-list" id="agentPickerList"></div>
+    </div>
+  </div>
+
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -50,13 +63,14 @@
       </div>
 
       <div class="agent-card">
-        <div class="agent-avatar">1567</div>
+        <div class="agent-avatar" id="agentAvatar">—</div>
         <div class="agent-meta">
-          <div class="agent-name">Agent 1567</div>
+          <div class="agent-name" id="agentName">Connecting…</div>
           <div class="agent-status" id="regStatus">
             <span class="dot dot-gray"></span> Connecting…
           </div>
         </div>
+        <button type="button" class="agent-switch-btn hidden" id="btnSwitchAgent" title="Switch agent seat">⇄</button>
       </div>
 
       <div class="status-toggle">

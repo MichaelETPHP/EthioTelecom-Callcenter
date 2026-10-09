@@ -14,6 +14,58 @@ SIP_DISPLAY_NAME = os.environ.get("SIP_DISPLAY_NAME", "Gebeta Technology Trading
 
 COMPANY_NAME = os.environ.get("COMPANY_NAME", "Gebeta Technology Trading plc")
 
+# --- Call hunting across multiple agent seats ------------------------------
+# Each seat is its own SIP extension on the same PBX (SIP_DOMAIN/SIP_SERVER/
+# SIP_WS_URL above) - a device picks one seat to register as (see the Agent
+# picker in the UI). Seat 1 reuses SIP_USERNAME/PASSWORD above so this keeps
+# working with just the one extension that already exists; seats 2-4 only
+# appear once their own AGENT2/3/4_SIP_* env vars are filled in (e.g. once
+# the PBX admin provisions more extensions), so nothing breaks today.
+def _agent_seat(seat_id, label, username, password, display_name):
+    return {
+        "id": seat_id,
+        "label": label,
+        "username": username,
+        "password": password,
+        "displayName": display_name or label,
+    }
+
+
+AGENT_SEATS = [
+    seat
+    for seat in [
+        _agent_seat("1", "Agent 1", SIP_USERNAME, SIP_PASSWORD, SIP_DISPLAY_NAME),
+        _agent_seat(
+            "2", "Agent 2",
+            os.environ.get("AGENT2_SIP_USERNAME", ""),
+            os.environ.get("AGENT2_SIP_PASSWORD", ""),
+            os.environ.get("AGENT2_SIP_DISPLAY_NAME", ""),
+        ),
+        _agent_seat(
+            "3", "Agent 3",
+            os.environ.get("AGENT3_SIP_USERNAME", ""),
+            os.environ.get("AGENT3_SIP_PASSWORD", ""),
+            os.environ.get("AGENT3_SIP_DISPLAY_NAME", ""),
+        ),
+        _agent_seat(
+            "4", "Agent 4",
+            os.environ.get("AGENT4_SIP_USERNAME", ""),
+            os.environ.get("AGENT4_SIP_PASSWORD", ""),
+            os.environ.get("AGENT4_SIP_DISPLAY_NAME", ""),
+        ),
+    ]
+    if seat["username"] and seat["password"]
+]
+
+# How long an incoming call rings on one seat before this app gives up on
+# that seat and hands the call to the next one in AGENT_SEATS (looping back
+# to the first after the last) via a SIP redirect - see static/js/app.js.
+# Best-effort: whether telecontactcenter.et actually re-INVITEs the next
+# seat on a 302 is outside our control to verify from here; if it doesn't,
+# the call just stops ringing on this seat and falls to whatever the PBX's
+# own no-answer handling does.
+CALL_HUNT_TIMEOUT_SECONDS = int(os.environ.get("CALL_HUNT_TIMEOUT_SECONDS", "20"))
+
 # Which SMS channel the single/quick-multi SMS tab (/api/sms) uses:
 # "dongle" (sms_gateway.py, USB AT-command modem), "android"
 # (android_sms_gateway.py, a phone running capcom6/android-sms-gateway), or
