@@ -15,6 +15,8 @@
     --accent-ink: #ffffff;
     --ok: #2f8f4e;
     --warn: #c2941a;
+
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   }
   * { box-sizing: border-box; }
   body {
@@ -58,7 +60,7 @@
     min-height: 560px;
   }
   .call-panel {
-    flex: 0 0 380px;
+    flex: 0 0 420px;
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 14px;
@@ -73,7 +75,15 @@
   }
   iframe {
     width: 100%;
-    height: 620px;
+    /* The console's own mobile layout kicks in under 860px wide (this
+       panel is narrower than that), and at that width its sidebar +
+       dial pad need up to ~970px of height - this iframe is a fixed
+       box, so it has to be tall enough up front or the console scrolls
+       inside itself, including the dialed number display. Measured
+       against the actual rendered page, not guessed; sized with
+       headroom so this still works even before call/static/css/style.css
+       is redeployed with its own matching tightening pass. */
+    height: 1000px;
     border: 0;
     border-radius: 10px;
     display: block;
@@ -89,6 +99,23 @@
     text-align: center;
   }
   .empty-state .icon { font-size: 40px; }
+  /* Entry transition for the empty-state <-> order-view swap - mirrors
+     the same hidden/visible two-class pattern call/static/js/app.js uses
+     for its own call stages (setStage), so a brand-new state never just
+     snaps into existence. */
+  .empty-state, #orderView {
+    opacity: 0;
+    transform: scale(0.97);
+    transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+  }
+  .empty-state.visible, #orderView.visible {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .empty-state.panel-hidden, #orderView.panel-hidden { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .empty-state, #orderView { transition: opacity 150ms ease; transform: none !important; }
+  }
   .customer-card {
     display: flex;
     align-items: center;
@@ -176,8 +203,12 @@
     font-size: 13px;
     cursor: pointer;
     margin-right: 8px;
+    transition: transform 160ms var(--ease-out), opacity 150ms ease;
   }
-  button.demo-btn:hover { opacity: 0.85; }
+  @media (hover: hover) and (pointer: fine) {
+    button.demo-btn:hover { opacity: 0.85; }
+  }
+  button.demo-btn:active { transform: scale(0.97); }
   .customer-list {
     display: flex;
     flex-direction: column;
@@ -199,7 +230,13 @@
     cursor: pointer;
     text-align: left;
   }
-  .customer-row:hover { border-color: var(--accent); background: #fff6f0; }
+  .customer-row {
+    transition: transform 160ms var(--ease-out), border-color 150ms ease, background 150ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .customer-row:hover { border-color: var(--accent); background: #fff6f0; }
+  }
+  .customer-row:active { transform: scale(0.97); }
   .customer-row-phone {
     color: var(--muted);
     font-variant-numeric: tabular-nums;
@@ -230,13 +267,13 @@
     </div>
 
     <h2>Customer</h2>
-    <div id="emptyState" class="empty-state">
+    <div id="emptyState" class="empty-state visible">
       <div class="icon">📞</div>
       <div>Waiting for a call…</div>
       <div style="font-size:13px;">Their food order and ride booking (whichever apply) pop up here as soon as they call in.</div>
     </div>
 
-    <div id="orderView" style="display:none;">
+    <div id="orderView" class="panel-hidden">
       <div class="customer-card">
         <div class="avatar" id="customerAvatar">?</div>
         <div style="flex:1;">
@@ -375,13 +412,26 @@
     `;
   }
 
+  // Swaps which of the two panels (emptyState / orderView) is shown, with
+  // a short fade+scale entrance rather than an abrupt display toggle -
+  // same two-step dance (remove panel-hidden, force reflow, add .visible
+  // on the next frame) as call/static/js/app.js's own setStage().
+  function showPanel(toShow, toHide) {
+    toHide.classList.remove("visible");
+    toHide.classList.add("panel-hidden");
+
+    toShow.classList.remove("visible");
+    toShow.classList.remove("panel-hidden");
+    void toShow.offsetWidth; // force reflow so the transition below actually runs
+    requestAnimationFrame(() => toShow.classList.add("visible"));
+  }
+
   function showOrderForPhone(phone) {
     const order = ORDERS_BY_PHONE[phone];
     const ride = RIDES_BY_PHONE[phone];
     const name = (order && order.name) || (ride && ride.name) || "Unknown customer";
 
-    emptyState.style.display = "none";
-    orderView.style.display = "block";
+    showPanel(orderView, emptyState);
     customerPhone.textContent = phone;
     customerName.textContent = name;
     customerAvatar.textContent = name === "Unknown customer" ? "?" : name.charAt(0);
@@ -398,8 +448,7 @@
   }
 
   function clearOrderView() {
-    orderView.style.display = "none";
-    emptyState.style.display = "flex";
+    showPanel(emptyState, orderView);
   }
 
   // ---------------------------------------------------------------------

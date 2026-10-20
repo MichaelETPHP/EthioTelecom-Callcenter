@@ -750,9 +750,11 @@ button.primary:active:not(:disabled), button.secondary:active:not(:disabled) { t
     align-items: center;
     border-right: none;
     border-bottom: 1px solid var(--border);
-    padding: 12px 16px;
-    gap: 12px;
+    padding: 10px 14px;
+    gap: 8px;
   }
+
+  .agent-card { padding: 10px; }
 
   .brand-text span { display: none; }
 
@@ -793,8 +795,10 @@ button.primary:active:not(:disabled), button.secondary:active:not(:disabled) { t
     padding-bottom: calc(var(--nav-height) + 24px);
   }
 
-  .call-stage { min-height: 220px; padding: 20px; }
-  .dialer { max-width: 100%; }
+  .call-stage { min-height: 180px; padding: 16px; margin-bottom: 16px; }
+  .dialer { max-width: 100%; padding: 16px; }
+  .dialpad { gap: 8px; margin-bottom: 10px; }
+  .dialpad button { min-height: 42px; padding: 10px 0; }
   .caller-number { font-size: 20px; }
   .developer-hero { flex-direction: column; gap: 18px; }
   .docs-shell { display: block; }
