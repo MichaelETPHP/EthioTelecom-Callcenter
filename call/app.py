@@ -108,14 +108,15 @@ def index():
 # ---------------------------------------------------------------------------
 @app.route("/api/agents")
 def list_agents():
-    """Seat id/label/displayName only - no SIP credentials. The browser
-    picks one of these (see the Agent picker), then calls
-    /api/config?agent=<id> to get that seat's actual sign-in details.
+    """Seat id/label/displayName/username - no SIP passwords. username (the
+    extension number, e.g. "1568") isn't a credential on its own and is
+    needed client-side to build the SIP redirect Contact header for call
+    hunting; the browser calls /api/config?agent=<id> to get the password.
     """
     return jsonify(
         {
             "seats": [
-                {"id": s["id"], "label": s["label"], "displayName": s["displayName"]}
+                {"id": s["id"], "label": s["label"], "displayName": s["displayName"], "username": s["username"]}
                 for s in config.AGENT_SEATS
             ],
             "callHuntTimeoutSeconds": config.CALL_HUNT_TIMEOUT_SECONDS,

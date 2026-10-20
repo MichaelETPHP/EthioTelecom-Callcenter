@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zema Connect — Agent Desk</title>
+<style>
+  :root {
+    --bg: #faf7f2;
+    --panel: #ffffff;
+    --ink: #2b2420;
+    --muted: #8a7e73;
+    --line: #ece4d8;
+    --accent: #d9622b;
+    --accent-ink: #ffffff;
+    --ok: #2f8f4e;
+    --warn: #c2941a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  header {
+    padding: 18px 24px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  header .tag {
+    font-size: 13px;
+    opacity: 0.85;
+  }
+  .layout {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .order-panel {
+    flex: 1 1 480px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px;
+    min-height: 560px;
+  }
+  .call-panel {
+    flex: 0 0 380px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .call-panel h2, .order-panel h2 {
+    margin: 0 0 14px;
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  iframe {
+    width: 100%;
+    height: 620px;
+    border: 0;
+    border-radius: 10px;
+    display: block;
+  }
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 460px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .empty-state .icon { font-size: 40px; }
+  .customer-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 16px;
+  }
+  .avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .customer-name { font-size: 18px; font-weight: 700; }
+  .customer-phone { color: var(--muted); font-size: 14px; }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .badge.ringing { background: #fde8d8; color: var(--accent); }
+  .badge.active { background: #e3f3e8; color: var(--ok); }
+  .section-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin: 18px 0 8px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table th, table td { text-align: left; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  table th { color: var(--muted); font-weight: 600; }
+  .totals { display: flex; justify-content: space-between; margin-top: 10px; font-weight: 700; }
+  .history-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+  }
+  .history-item .status { color: var(--muted); }
+  .service-card {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+  }
+  .service-card:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
+  .service-card-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .no-record {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0;
+  }
+  .ride-status { margin-bottom: 10px; }
+  .demo-controls {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--line);
+  }
+  .demo-controls p {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 0 8px;
+  }
+  button.demo-btn {
+    background: var(--ink);
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    margin-right: 8px;
+  }
+  button.demo-btn:hover { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍲🚗 Zema Connect — Agent Desk</h1>
+  <span class="tag">Call-center screen-pop demo — food &amp; rides, one shared line</span>
+</header>
+
+<div class="layout">
+
+  <section class="order-panel">
+    <h2>Customer</h2>
+    <div id="emptyState" class="empty-state">
+      <div class="icon">📞</div>
+      <div>Waiting for a call…</div>
+      <div style="font-size:13px;">Their food order and ride booking (whichever apply) pop up here as soon as they call in.</div>
+    </div>
+
+    <div id="orderView" style="display:none;">
+      <div class="customer-card">
+        <div class="avatar" id="customerAvatar">?</div>
+        <div style="flex:1;">
+          <div class="customer-name" id="customerName">—</div>
+          <div class="customer-phone" id="customerPhone">—</div>
+        </div>
+        <span class="badge ringing" id="callBadge">Ringing</span>
+      </div>
+
+      <div class="service-card">
+        <div class="service-card-title">🍲 Food order</div>
+        <div id="foodBlock"></div>
+      </div>
+
+      <div class="service-card">
+        <div class="service-card-title">🚗 Ride booking</div>
+        <div id="rideBlock"></div>
+      </div>
+    </div>
+
+    <div class="demo-controls">
+      <p>Demo only — simulates the postMessage events the call console sends on a real call, without needing to dial in.</p>
+      <button class="demo-btn" id="btnSimulateCall">📞 Simulate call from 0916182957</button>
+      <button class="demo-btn" id="btnSimulateUnknown">📞 Simulate call from unknown number</button>
+      <button class="demo-btn" id="btnSimulateEnd">☎ End call</button>
+    </div>
+  </section>
+
+  <section class="call-panel">
+    <h2>Call center</h2>
+    <iframe
+      id="ethioCallFrame"
+      src="https://ethiotelecom.zmichael.click/call/"
+      allow="microphone"
+      title="Call Center"
+    ></iframe>
+  </section>
+
+</div>
+
+<script>
+  // ---------------------------------------------------------------------
+  // Sample order data, keyed by local phone format (09.../07...). A real
+  // order app would replace this with a fetch() to its own backend.
+  // ---------------------------------------------------------------------
+  const ORDERS_BY_PHONE = {
+    "0916182957": {
+      name: "Michael Taye",
+      items: [
+        { item: "Doro Wat (family size)", qty: 1, price: "450 ETB" },
+        { item: "Injera (extra)", qty: 3, price: "90 ETB" },
+        { item: "Ambo Water 1L", qty: 2, price: "60 ETB" },
+      ],
+      total: "600 ETB",
+      address: "Bole, near Edna Mall, Addis Ababa",
+      history: [
+        { date: "2026-10-14", summary: "Shiro + Injera", status: "Delivered" },
+        { date: "2026-09-30", summary: "Tibs combo", status: "Delivered" },
+        { date: "2026-09-02", summary: "Doro Wat (family size)", status: "Delivered" },
+      ],
+    },
+  };
+
+  // Same shared phone line also serves the ride side of the business - a
+  // separate data source, looked up by the same caller number.
+  const RIDES_BY_PHONE = {
+    "0916182957": {
+      name: "Michael Taye",
+      status: "Driver en route",
+      driver: "Abel Kassahun",
+      vehicle: "Toyota Vitz — AA 123 456",
+      pickup: "Bole, near Edna Mall",
+      dropoff: "Mexico Square",
+      eta: "6 min",
+      fare: "180 ETB",
+      history: [
+        { date: "2026-10-10", summary: "Bole → Piassa", status: "Completed" },
+        { date: "2026-09-25", summary: "CMC → Megenagna", status: "Completed" },
+      ],
+    },
+  };
+
+  const emptyState = document.getElementById("emptyState");
+  const orderView = document.getElementById("orderView");
+  const customerAvatar = document.getElementById("customerAvatar");
+  const customerName = document.getElementById("customerName");
+  const customerPhone = document.getElementById("customerPhone");
+  const callBadge = document.getElementById("callBadge");
+  const foodBlock = document.getElementById("foodBlock");
+  const rideBlock = document.getElementById("rideBlock");
+
+  function historyHtml(history) {
+    return history
+      .map((h) => `<div class="history-item"><span>${h.date} — ${h.summary}</span><span class="status">${h.status}</span></div>`)
+      .join("");
+  }
+
+  function renderFoodOrder(order) {
+    if (!order) {
+      foodBlock.innerHTML = '<p class="no-record">No active food order for this number.</p>';
+      return;
+    }
+    const itemsHtml = order.items
+      .map((i) => `<tr><td>${i.item}</td><td>${i.qty}</td><td>${i.price}</td></tr>`)
+      .join("");
+    foodBlock.innerHTML = `
+      <table>
+        <thead><tr><th>Item</th><th>Qty</th><th>Price</th></tr></thead>
+        <tbody>${itemsHtml}</tbody>
+      </table>
+      <div class="totals"><span>Total</span><span>${order.total}</span></div>
+      <div class="section-label">Delivery address</div>
+      <div>${order.address}</div>
+      <div class="section-label">Order history</div>
+      <div>${historyHtml(order.history)}</div>
+    `;
+  }
+
+  function renderRide(ride) {
+    if (!ride) {
+      rideBlock.innerHTML = '<p class="no-record">No active ride for this number.</p>';
+      return;
+    }
+    rideBlock.innerHTML = `
+      <div class="ride-status"><span class="badge active">${ride.status}</span></div>
+      <table>
+        <tr><th>Driver</th><td>${ride.driver}</td></tr>
+        <tr><th>Vehicle</th><td>${ride.vehicle}</td></tr>
+        <tr><th>Pickup</th><td>${ride.pickup}</td></tr>
+        <tr><th>Dropoff</th><td>${ride.dropoff}</td></tr>
+        <tr><th>ETA</th><td>${ride.eta}</td></tr>
+        <tr><th>Fare</th><td>${ride.fare}</td></tr>
+      </table>
+      <div class="section-label">Ride history</div>
+      <div>${historyHtml(ride.history)}</div>
+    `;
+  }
+
+  function showOrderForPhone(phone) {
+    const order = ORDERS_BY_PHONE[phone];
+    const ride = RIDES_BY_PHONE[phone];
+    const name = (order && order.name) || (ride && ride.name) || "Unknown customer";
+
+    emptyState.style.display = "none";
+    orderView.style.display = "block";
+    customerPhone.textContent = phone;
+    customerName.textContent = name;
+    customerAvatar.textContent = name === "Unknown customer" ? "?" : name.charAt(0);
+    callBadge.textContent = "Ringing";
+    callBadge.className = "badge ringing";
+
+    renderFoodOrder(order);
+    renderRide(ride);
+  }
+
+  function markCallActive() {
+    callBadge.textContent = "On call";
+    callBadge.className = "badge active";
+  }
+
+  function clearOrderView() {
+    orderView.style.display = "none";
+    emptyState.style.display = "flex";
+  }
+
+  // ---------------------------------------------------------------------
+  // Real integration: the embedded call console posts these messages on
+  // every call lifecycle event. See call/static/js/app.js postToParentFrame.
+  // ---------------------------------------------------------------------
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+    if (!data || data.source !== "ethio-call-console") return;
+
+    if (data.type === "ringing") {
+      showOrderForPhone(data.phone);
+    } else if (data.type === "accepted") {
+      markCallActive();
+    } else if (data.type === "ended" || data.type === "failed") {
+      clearOrderView();
+    }
+  });
+
+  // ---------------------------------------------------------------------
+  // Demo buttons — fire the same message shape locally so this page is
+  // useful to look at without having to place a real call first.
+  // ---------------------------------------------------------------------
+  function simulate(type, phone) {
+    window.postMessage(
+      { source: "ethio-call-console", type, phone, direction: "inbound", callId: "demo", ts: new Date().toISOString() },
+      "*"
+    );
+  }
+
+  document.getElementById("btnSimulateCall").addEventListener("click", () => simulate("ringing", "0916182957"));
+  document.getElementById("btnSimulateUnknown").addEventListener("click", () => simulate("ringing", "0911000000"));
+  document.getElementById("btnSimulateEnd").addEventListener("click", () => simulate("ended", ""));
+</script>
+
+</body>
+</html>
