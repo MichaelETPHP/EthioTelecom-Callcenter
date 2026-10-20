@@ -1093,6 +1093,27 @@
   }
 
   // ---------------------------------------------------------------------
+  // Reflect the caller's number in the page URL once a call is actually
+  // picked up (?callphone=<number>), so the address bar/share link always
+  // shows who the agent is on the phone with. Uses replaceState - no reload,
+  // no new history entry. Cleared again back to idle when the call ends.
+  // ---------------------------------------------------------------------
+  function setCallPhoneUrlParam(phone) {
+    try {
+      const url = new URL(window.location.href);
+      if (phone && isRealNumber(phone)) {
+        url.searchParams.set("callphone", phone);
+      } else {
+        url.searchParams.delete("callphone");
+      }
+      url.searchParams.delete("autocall");
+      history.replaceState(null, "", url.toString());
+    } catch (e) {
+      console.warn("Failed to update callphone URL param", e);
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // ICE / NAT traversal
   //
   // Without a STUN server, WebRTC only gathers "host" ICE candidates (the
@@ -1198,6 +1219,7 @@
     sessionPeer = null;
     clearHuntTimer();
     hideIncomingCallAlert();
+    setCallPhoneUrlParam(null);
     remoteAudioBlocked = false;
     if (audioBlockedBanner) audioBlockedBanner.classList.add("hidden");
     dtmfPad.classList.add("hidden");
@@ -1391,6 +1413,7 @@
           clearHuntTimer();
           stopRingtone();
           hideIncomingCallAlert();
+          setCallPhoneUrlParam(peer);
           session.answer({
             mediaConstraints: { audio: true, video: false },
             pcConfig: { iceServers: ICE_SERVERS },
