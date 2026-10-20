@@ -1098,11 +1098,29 @@
   // shows who the agent is on the phone with. Uses replaceState - no reload,
   // no new history entry. Cleared again back to idle when the call ends.
   // ---------------------------------------------------------------------
+  // Ethiopian numbers arrive from the PBX in all sorts of shapes
+  // (+251916182957, 251916182957, 0916182957...). The URL should only ever
+  // show the local 09/07 form, never the +251 country code.
+  function toLocalPhoneFormat(number) {
+    if (!number) return number;
+    const digits = String(number).replace(/\D/g, "");
+    if (digits.startsWith("251") && digits.length === 12) {
+      return `0${digits.slice(3)}`;
+    }
+    if (digits.length === 9 && (digits.startsWith("9") || digits.startsWith("7"))) {
+      return `0${digits}`;
+    }
+    if (digits.startsWith("0") && digits.length === 10) {
+      return digits;
+    }
+    return number;
+  }
+
   function setCallPhoneUrlParam(phone) {
     try {
       const url = new URL(window.location.href);
       if (phone && isRealNumber(phone)) {
-        url.searchParams.set("callphone", phone);
+        url.searchParams.set("callphone", toLocalPhoneFormat(phone));
       } else {
         url.searchParams.delete("callphone");
       }
