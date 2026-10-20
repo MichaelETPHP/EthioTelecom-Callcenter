@@ -47,6 +47,7 @@
   const btnAvailable = $("btnAvailable");
   const btnAway = $("btnAway");
   const btnEnableAudio = $("btnEnableAudio");
+  const audioBlockedBanner = $("audioBlockedBanner");
 
   const pinModal = $("pinModal");
   const pinModalCard = $("pinModalCard");
@@ -131,6 +132,62 @@
   let currentAgentId = null; // which seat this device is connected as
   let huntTimer = null; // pending "give up and hand off" timer for the ringing call
   const AGENT_SEAT_STORAGE_KEY = "callConsoleAgentId";
+
+  // ---------------------------------------------------------------------
+  // ?callphone=<number>[&autocall=1] — click-to-call from an external
+  // link/system. callphone alone just pre-fills the dial box (the agent
+  // still presses Call); add autocall=1 to place the call automatically
+  // once this device is registered.
+  // ---------------------------------------------------------------------
+  const queryParams = new URLSearchParams(location.search);
+  const queryCallPhone = (queryParams.get("callphone") || "").replace(/[^\d+*#]/g, "");
+  let autoCallPending = Boolean(queryCallPhone) && ["1", "true"].includes(queryParams.get("autocall"));
+
+  if (queryCallPhone && dialInput) {
+    dialInput.value = queryCallPhone;
+  }
+
+  // Whether the <audio id="remoteAudio"> element's playback is currently
+  // blocked by the browser's autoplay policy (no user gesture yet on this
+  // page load - most likely right after an auto-placed call). Call
+  // signaling itself is never blocked by autoplay policy, only audio
+  // playback is, so a call placed this way can connect "silently" until
+  // the agent clicks/types anywhere - the banner below makes that visible
+  // and fixes it on the very next interaction instead of staying silent.
+  let remoteAudioBlocked = false;
+
+  function tryPlayRemoteAudio() {
+    remoteAudio
+      .play()
+      .then(() => {
+        remoteAudioBlocked = false;
+        if (audioBlockedBanner) audioBlockedBanner.classList.add("hidden");
+      })
+      .catch((error) => {
+        remoteAudioBlocked = true;
+        console.warn("Remote call audio was blocked", error);
+        if (audioBlockedBanner) audioBlockedBanner.classList.remove("hidden");
+        if (btnEnableAudio) {
+          btnEnableAudio.classList.remove("enabled");
+          btnEnableAudio.innerHTML = '<span class="dot dot-yellow"></span> Enable call sounds';
+        }
+      });
+  }
+
+  // Any interaction anywhere on the page retries blocked remote audio -
+  // this is the recovery path for a call placed via autocall=1 with no
+  // prior user gesture to satisfy the browser's autoplay policy.
+  document.addEventListener("pointerdown", () => {
+    if (remoteAudioBlocked) tryPlayRemoteAudio();
+  });
+  document.addEventListener("keydown", () => {
+    if (remoteAudioBlocked) tryPlayRemoteAudio();
+  });
+  if (audioBlockedBanner) {
+    audioBlockedBanner.addEventListener("click", () => {
+      if (remoteAudioBlocked) tryPlayRemoteAudio();
+    });
+  }
 
   function initializeDeveloperDocs() {
     if (!developerView) return;
@@ -1091,13 +1148,7 @@
         // announcement). Prefer it over our locally generated ringback.
         if (direction === "outbound") stopRingtone();
         remoteAudio.srcObject = event.streams[0];
-        remoteAudio.play().catch((error) => {
-          console.warn("Remote call audio was blocked", error);
-          if (btnEnableAudio) {
-            btnEnableAudio.classList.remove("enabled");
-            btnEnableAudio.innerHTML = '<span class="dot dot-yellow"></span> Enable call sounds';
-          }
-        });
+        tryPlayRemoteAudio();
       });
     });
 
@@ -1105,7 +1156,7 @@
       clearHuntTimer();
       stopRingtone();
       hideIncomingCallAlert();
-      remoteAudio.play().catch(() => {});
+      tryPlayRemoteAudio();
       setStage("active");
       activeNumberEl.textContent = peer;
       startTimer();
@@ -1115,7 +1166,7 @@
       clearHuntTimer();
       stopRingtone();
       hideIncomingCallAlert();
-      remoteAudio.play().catch(() => {});
+      tryPlayRemoteAudio();
       setStage("active");
       activeNumberEl.textContent = peer;
       if (!callStartedAt) startTimer();
@@ -1147,6 +1198,8 @@
     sessionPeer = null;
     clearHuntTimer();
     hideIncomingCallAlert();
+    remoteAudioBlocked = false;
+    if (audioBlockedBanner) audioBlockedBanner.classList.add("hidden");
     dtmfPad.classList.add("hidden");
     btnMute.classList.remove("active-state");
     btnHold.classList.remove("active-state");
@@ -1302,11 +1355,18 @@
     });
 
     window._ua = ua; // exposed for support/debugging (open console, inspect window._ua)
+    window._debugCurrentSession = () => currentSession; // ditto - inspect the live call session
 
     ua.on("connecting", () => setRegStatus("pending", "Connecting…"));
     ua.on("connected", () => setRegStatus("pending", "Connected, registering…"));
     ua.on("disconnected", () => setRegStatus("bad", "Disconnected"));
-    ua.on("registered", () => setRegStatus("ok", "Available"));
+    ua.on("registered", () => {
+      setRegStatus("ok", "Available");
+      if (autoCallPending) {
+        autoCallPending = false;
+        placeCall(queryCallPhone);
+      }
+    });
     ua.on("unregistered", () => setRegStatus("gray", "Unregistered"));
     ua.on("registrationFailed", (e) => setRegStatus("bad", `Registration failed: ${e.cause || ""}`));
 

@@ -8,6 +8,14 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
 </head>
 <body>
+  <!-- Shown when the browser's autoplay policy blocks the remote call
+       audio (e.g. a call placed via ?autocall=1 with no prior click on
+       the page) - clicking it, or just clicking/typing anywhere, retries
+       playback and hides this. -->
+  <div class="audio-blocked-banner hidden" id="audioBlockedBanner" role="status">
+    🔇 Tap anywhere to hear the caller
+  </div>
+
   <!-- Incoming call popup — fixed over the whole app so it shows no matter
        which nav tab (Phone/SMS/History/Developers) is currently open. -->
   <div class="incoming-call-popup hidden" id="incomingCallPopup" role="alertdialog" aria-live="assertive" aria-label="Incoming call">
