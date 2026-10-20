@@ -1,0 +1,44 @@
+<!--
+  Ethio Call Center — embed snippet
+
+  Paste this into your own app's page to add the call console and get
+  notified of call events (ringing/accepted/ended/failed) with the
+  caller's phone number, so you can look up and show their order/ride/
+  booking details etc. yourself.
+
+  See ../call/README.md ("Click-to-call, screen-pop, and embedding in
+  another app") and index.html in this same folder for a complete,
+  runnable example with sample data.
+-->
+
+<iframe
+  id="ethioCallFrame"
+  src="https://ethiotelecom.zmichael.click/call/"
+  style="width: 380px; height: 640px; border: 0; border-radius: 12px;"
+  allow="microphone"
+  title="Call Center"
+></iframe>
+
+<script>
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+    if (!data || data.source !== "ethio-call-console") return;
+
+    // data.type:      "ringing" | "accepted" | "ended" | "failed"
+    // data.phone:     local format, e.g. "0916182957" - never +251
+    // data.direction: "inbound" | "outbound"
+    // data.callId:    same value across ringing -> accepted -> ended for one call
+
+    if (data.type === "ringing") {
+      // TODO: replace with your own lookup, e.g.:
+      // fetch(`/api/orders/by-phone/${data.phone}`)
+      //   .then((res) => res.json())
+      //   .then(renderOrderDetails);
+      console.log("Incoming call from", data.phone, "- look up their orders/booking");
+    }
+
+    if (data.type === "ended" || data.type === "failed") {
+      // TODO: clear/hide whatever you showed above - the call is over
+    }
+  });
+</script>
