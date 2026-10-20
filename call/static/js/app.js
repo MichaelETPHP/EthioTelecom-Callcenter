@@ -119,6 +119,7 @@
   let ringtoneNodes = null;
   let sessionDirection = null; // 'inbound' | 'outbound'
   let sessionPeer = null;
+  let currentCallId = null; // stable id for postToParentFrame across one call's ringing->accepted->ended
   let savedContacts = []; // [{id, name, phone, valid}], from /api/contacts
   let smsBulkMaxRecipients = 100; // overwritten from /api/config once it loads
   let smsUnlocked = false; // gates the ✉ SMS nav tab behind a PIN for this page load
@@ -1132,6 +1133,44 @@
   }
 
   // ---------------------------------------------------------------------
+  // Embedding bridge — when this console is loaded inside an <iframe> on
+  // another site (e.g. an order-management app), broadcast call lifecycle
+  // events via postMessage so the host page can screen-pop that caller's
+  // details without polling our DOM or URL. No-op when not embedded.
+  //
+  // Host page listens like:
+  //   window.addEventListener("message", (e) => {
+  //     if (!e.data || e.data.source !== "ethio-call-console") return;
+  //     const { type, phone, direction, callId } = e.data;
+  //     // type: "ringing" | "accepted" | "ended" | "failed"
+  //     // phone: local format, e.g. "0916182957" (never +251)
+  //     if (type === "ringing") lookUpCustomerByPhone(phone);
+  //   });
+  //
+  // targetOrigin is "*" because the embedding host's domain isn't fixed
+  // yet - tighten this to an exact allowlisted origin once that's known
+  // (see ALLOWED_PARENT_ORIGIN below).
+  // ---------------------------------------------------------------------
+  const ALLOWED_PARENT_ORIGIN = "*"; // e.g. "https://orders.example.com" once known
+
+  function postToParentFrame(type, extra) {
+    if (window === window.parent) return; // not embedded in an iframe - nothing to notify
+    try {
+      window.parent.postMessage(
+        {
+          source: "ethio-call-console",
+          type,
+          ts: new Date().toISOString(),
+          ...extra,
+        },
+        ALLOWED_PARENT_ORIGIN
+      );
+    } catch (e) {
+      console.warn("postMessage to parent frame failed", e);
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // ICE / NAT traversal
   //
   // Without a STUN server, WebRTC only gathers "host" ICE candidates (the
@@ -1199,6 +1238,7 @@
       setStage("active");
       activeNumberEl.textContent = peer;
       startTimer();
+      postToParentFrame("accepted", { direction, phone: toLocalPhoneFormat(peer), callId: currentCallId });
     });
 
     session.on("confirmed", () => {
@@ -1218,6 +1258,7 @@
       const elapsed = stopTimer();
       const status = direction === "inbound" ? "missed" : "failed";
       logCall(direction, peer, status, elapsed);
+      postToParentFrame("failed", { direction, phone: toLocalPhoneFormat(peer), callId: currentCallId, status });
       resetToIdle();
     });
 
@@ -1227,6 +1268,7 @@
       hideIncomingCallAlert();
       const elapsed = stopTimer();
       logCall(direction, peer, "answered", elapsed);
+      postToParentFrame("ended", { direction, phone: toLocalPhoneFormat(peer), callId: currentCallId });
       resetToIdle();
     });
   }
@@ -1235,6 +1277,7 @@
     currentSession = null;
     sessionDirection = null;
     sessionPeer = null;
+    currentCallId = null;
     clearHuntTimer();
     hideIncomingCallAlert();
     setCallPhoneUrlParam(null);
@@ -1423,9 +1466,15 @@
           return;
         }
 
+        currentCallId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
         attachSessionHandlers(session, "inbound", peer);
         showIncomingCallAlert(peer);
         startHuntTimer(session, peer);
+        postToParentFrame("ringing", {
+          direction: "inbound",
+          phone: toLocalPhoneFormat(peer),
+          callId: currentCallId,
+        });
 
         const acceptCall = () => {
           clearHuntTimer();
@@ -1463,6 +1512,7 @@
 
     outgoingNumberEl.textContent = target;
     setStage("outgoing");
+    currentCallId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
     attachSessionHandlers(session, "outbound", target);
     startRingback();
 
