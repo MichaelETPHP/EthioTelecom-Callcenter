@@ -178,6 +178,33 @@
     margin-right: 8px;
   }
   button.demo-btn:hover { opacity: 0.85; }
+  .customer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 22px;
+  }
+  .customer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+  }
+  .customer-row:hover { border-color: var(--accent); background: #fff6f0; }
+  .customer-row-phone {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .customer-row .call-icon { margin-right: 8px; }
 </style>
 </head>
 <body>
@@ -190,6 +217,18 @@
 <div class="layout">
 
   <section class="order-panel">
+    <h2>Customers — click to call</h2>
+    <div class="customer-list" id="customerList">
+      <button class="customer-row" data-phone="0916182957">
+        <span><span class="call-icon">📞</span>Michael Taye</span>
+        <span class="customer-row-phone">0916182957</span>
+      </button>
+      <button class="customer-row" data-phone="0911223344">
+        <span><span class="call-icon">📞</span>Sara Alemu</span>
+        <span class="customer-row-phone">0911223344</span>
+      </button>
+    </div>
+
     <h2>Customer</h2>
     <div id="emptyState" class="empty-state">
       <div class="icon">📞</div>
@@ -364,8 +403,24 @@
   }
 
   // ---------------------------------------------------------------------
-  // Real integration: the embedded call console posts these messages on
-  // every call lifecycle event. See call/static/js/app.js postToParentFrame.
+  // Real integration (host -> console): clicking a customer places a call
+  // through the embedded widget, instead of the agent re-typing the number
+  // into the dialer themselves. See the matching listener in
+  // call/static/js/app.js.
+  // ---------------------------------------------------------------------
+  document.querySelectorAll(".customer-row").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.getElementById("ethioCallFrame").contentWindow.postMessage(
+        { source: "host-app", type: "dial", phone: btn.dataset.phone },
+        "*"
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // Real integration (console -> host): the embedded call console posts
+  // these messages on every call lifecycle event. See
+  // call/static/js/app.js postToParentFrame.
   // ---------------------------------------------------------------------
   window.addEventListener("message", (event) => {
     const data = event.data;

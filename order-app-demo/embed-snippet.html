@@ -41,4 +41,16 @@
       // TODO: clear/hide whatever you showed above - the call is over
     }
   });
+
+  // The other direction: place a call THROUGH the embedded widget, e.g.
+  // when the agent clicks a customer's number in your own UI, instead of
+  // them re-typing it into the dialer. Call this from a click handler
+  // anywhere in your page:
+  function callViaEthioConsole(phone) {
+    document.getElementById("ethioCallFrame").contentWindow.postMessage(
+      { source: "host-app", type: "dial", phone: phone },
+      "*"
+    );
+  }
+  // Example: <button onclick="callViaEthioConsole('0916182957')">Call</button>
 </script>

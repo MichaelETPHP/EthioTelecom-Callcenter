@@ -1170,6 +1170,24 @@
     }
   }
 
+  // The other direction: the embedding host page can tell this console to
+  // place a call (e.g. the agent clicked a customer's number in the order
+  // app's own list) by posting:
+  //   iframe.contentWindow.postMessage({ source: "host-app", type: "dial", phone: "0916182957" }, "*");
+  // Only honored from the direct embedder (event.source === window.parent),
+  // not from any other frame that might also be able to reach this window.
+  window.addEventListener("message", (event) => {
+    if (window === window.parent) return; // not embedded - nothing should be commanding us
+    if (event.source !== window.parent) return;
+    const data = event.data;
+    if (!data || data.source !== "host-app" || data.type !== "dial") return;
+
+    const target = String(data.phone || "").replace(/[^\d+*#]/g, "");
+    if (!target) return;
+    if (dialInput) dialInput.value = target;
+    placeCall(target);
+  });
+
   // ---------------------------------------------------------------------
   // ICE / NAT traversal
   //
