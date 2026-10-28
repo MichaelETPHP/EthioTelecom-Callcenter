@@ -116,6 +116,7 @@
   let sessionDirection = null; // 'inbound' | 'outbound'
   let sessionPeer = null;
   let currentCallId = null; // stable id for postToParentFrame across one call's ringing->accepted->ended
+  let lastIceIssue = null; // "failed" | "disconnected" | null - set if the media path dropped mid-call
   let savedContacts = []; // [{id, name, phone, valid}], from /api/contacts
   let smsBulkMaxRecipients = 100; // overwritten from /api/config once it loads
   let smsUnlocked = false; // gates the ✉ SMS nav tab behind a PIN for this page load
@@ -1195,8 +1196,25 @@
   // no reachable public candidate was ever offered. Used for BOTH outbound
   // calls and inbound answers - the two must match, or only one call
   // direction gets NAT traversal.
+  //
+  // STUN alone only helps when both sides are behind "easy" (full-cone /
+  // restricted-cone) NAT. On a symmetric NAT - common on some mobile
+  // carriers and office networks - STUN candidates get offered but never
+  // actually connect: audio can start for a moment on whatever path
+  // happened to work, then the ICE connectivity check finishes, settles on
+  // no usable pair, and the call drops. That matches "I accept, it talks
+  // briefly, then stops" exactly. A TURN relay is the standard fix - it
+  // gives both sides a reachable address when a direct path isn't
+  // possible. Falls back to the free, keyless Open Relay Project TURN
+  // service (https://www.metered.ca/tools/openrelay/) alongside STUN.
   // ---------------------------------------------------------------------
-  const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
+  const ICE_SERVERS = [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:openrelay.metered.ca:80" },
+    { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+    { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+    { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+  ];
 
   // ---------------------------------------------------------------------
   // Incoming call alert — the in-page popup, desktop notification, and
@@ -1231,14 +1249,25 @@
     currentSession = session;
     sessionDirection = direction;
     sessionPeer = peer;
+    lastIceIssue = null;
 
     session.on("peerconnection", (data) => {
-      data.peerconnection.addEventListener("track", (event) => {
+      const pc = data.peerconnection;
+      pc.addEventListener("track", (event) => {
         // The PBX may provide real early media (carrier ringback or an
         // announcement). Prefer it over our locally generated ringback.
         if (direction === "outbound") stopRingtone();
         remoteAudio.srcObject = event.streams[0];
         tryPlayRemoteAudio();
+      });
+      // Surfaces the exact moment the media path drops (as opposed to the
+      // SIP signaling), so a "connects, talks briefly, then goes silent"
+      // report can be told apart from a normal hangup in the call log.
+      pc.addEventListener("iceconnectionstatechange", () => {
+        console.log(`[call] ICE ${pc.iceConnectionState} (${direction}, ${peer})`);
+        if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
+          lastIceIssue = pc.iceConnectionState;
+        }
       });
     });
 
@@ -1268,18 +1297,25 @@
       stopRingtone();
       hideIncomingCallAlert();
       const elapsed = stopTimer();
-      const status = direction === "inbound" ? "missed" : "failed";
+      const cause = (e && e.cause) || lastIceIssue || "unknown";
+      console.warn(`[call] failed (${direction}, ${peer}) after ${elapsed}s - cause: ${cause}`, e);
+      const status = `${direction === "inbound" ? "missed" : "failed"} (${cause})`;
       logCall(direction, peer, status, elapsed);
       postToParentFrame("failed", { direction, phone: toLocalPhoneFormat(peer), callId: currentCallId, status });
       resetToIdle();
     });
 
-    session.on("ended", () => {
+    session.on("ended", (e) => {
       clearHuntTimer();
       stopRingtone();
       hideIncomingCallAlert();
       const elapsed = stopTimer();
-      logCall(direction, peer, "answered", elapsed);
+      // A clean hangup has cause "BYE" - only call out anything else (e.g.
+      // the media path dying mid-call), so normal call-enders still just
+      // read "answered" in the log.
+      const cause = (e && e.cause && e.cause !== "BYE" ? e.cause : null) || lastIceIssue;
+      console.log(`[call] ended (${direction}, ${peer}) after ${elapsed}s${cause ? ` - cause: ${cause}` : ""}`, e);
+      logCall(direction, peer, cause ? `answered (dropped: ${cause})` : "answered", elapsed);
       postToParentFrame("ended", { direction, phone: toLocalPhoneFormat(peer), callId: currentCallId });
       resetToIdle();
     });
