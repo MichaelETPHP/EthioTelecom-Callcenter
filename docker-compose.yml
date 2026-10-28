@@ -57,6 +57,53 @@ services:
     env_file:
       - .env
 
+  # TURN relay for the call console's WebRTC audio. Without this, a call
+  # that can't find a direct path through NAT (confirmed via a live SIP/ICE
+  # trace: ICE gathering stalls after Answer, then the PBX gives up and
+  # sends CANCEL) never connects. We don't have server access to the PBX
+  # itself (it's a managed Ethio Telecom FreePBX instance), so this runs
+  # here instead, on infrastructure we do control.
+  #
+  # network_mode: host is required - TURN relays real UDP media traffic on
+  # a whole port range (TURN_RELAY_MIN_PORT-TURN_RELAY_MAX_PORT below), and
+  # NAT-ing each of those individually through Docker's bridge network is
+  # both unreliable and unnecessary overhead. This bypasses Coolify's
+  # Traefik proxy entirely (fine - TURN isn't HTTP), so TURN_PORT and the
+  # relay port range need to be reachable directly - open them in Coolify's
+  # server-level firewall settings AND in your cloud provider's security
+  # group/firewall if it has one separate from Coolify's.
+  turn:
+    image: coturn/coturn:4.6.2-r1
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - -n
+      - --listening-port=${TURN_PORT:-3478}
+      - --min-port=${TURN_RELAY_MIN_PORT:-49152}
+      - --max-port=${TURN_RELAY_MAX_PORT:-49452}
+      - --realm=${TURN_REALM:-ethiotelecom.zmichael.click}
+      - --user=${TURN_USER:-callcenter}:${TURN_PASSWORD}
+      - --lt-cred-mech
+      - --fingerprint
+      - --no-cli
+      - --no-multicast-peers
+      - --no-tcp-relay
+      - --external-ip=${TURN_EXTERNAL_IP:-187.77.12.130}
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=100.64.0.0-100.127.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.0.0.0-192.0.0.255
+      - --denied-peer-ip=192.0.2.0-192.0.2.255
+      - --denied-peer-ip=192.88.99.0-192.88.99.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+      - --denied-peer-ip=198.18.0.0-198.19.255.255
+      - --denied-peer-ip=198.51.100.0-198.51.100.255
+      - --denied-peer-ip=203.0.113.0-203.0.113.255
+      - --denied-peer-ip=240.0.0.0-255.255.255.255
+
 volumes:
   caddy_data:
   caddy_config:
