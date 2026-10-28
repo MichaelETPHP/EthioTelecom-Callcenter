@@ -1494,7 +1494,26 @@
           callId: currentCallId,
         });
 
+        // The inline stage-incoming panel and the floating popup both show
+        // an Accept/Reject pair for the same ringing call, so there are
+        // always two Accept buttons on screen at once. Without this guard,
+        // answer() only fires on the first click, but both buttons stay
+        // live until the "accepted" event comes back from the PBX - which
+        // can take a second or two - so the agent sees nothing happen and
+        // clicks Accept again, thinking the first click didn't register.
+        let answered = false;
+        const setIncomingButtonsDisabled = (disabled) => {
+          btnAccept.disabled = disabled;
+          btnReject.disabled = disabled;
+          popupBtnAccept.disabled = disabled;
+          popupBtnReject.disabled = disabled;
+        };
+        setIncomingButtonsDisabled(false);
+
         const acceptCall = () => {
+          if (answered) return;
+          answered = true;
+          setIncomingButtonsDisabled(true);
           clearHuntTimer();
           stopRingtone();
           hideIncomingCallAlert();
@@ -1504,7 +1523,12 @@
             pcConfig: { iceServers: ICE_SERVERS },
           });
         };
-        const rejectCall = () => handOffIncomingCall(session, peer, "declined");
+        const rejectCall = () => {
+          if (answered) return;
+          answered = true;
+          setIncomingButtonsDisabled(true);
+          handOffIncomingCall(session, peer, "declined");
+        };
 
         btnAccept.onclick = acceptCall;
         btnReject.onclick = rejectCall;
