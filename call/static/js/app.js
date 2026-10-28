@@ -1200,21 +1200,16 @@
   // STUN alone only helps when both sides are behind "easy" (full-cone /
   // restricted-cone) NAT. On a symmetric NAT - common on some mobile
   // carriers and office networks - STUN candidates get offered but never
-  // actually connect: audio can start for a moment on whatever path
-  // happened to work, then the ICE connectivity check finishes, settles on
-  // no usable pair, and the call drops. That matches "I accept, it talks
-  // briefly, then stops" exactly. A TURN relay is the standard fix - it
-  // gives both sides a reachable address when a direct path isn't
-  // possible. Falls back to the free, keyless Open Relay Project TURN
-  // service (https://www.metered.ca/tools/openrelay/) alongside STUN.
+  // actually connect, which can cause a call that briefly connects to then
+  // drop. A TURN relay is the standard fix for that - BUT answer()/call()
+  // wait for ICE gathering to finish before the SDP is actually sent, so
+  // an unreachable ICE server doesn't just degrade quality, it can stall
+  // pickup entirely (confirmed: the free Open Relay TURN host timed out
+  // from this network, which is worse than the problem it was meant to
+  // fix - don't add a TURN server here again without first confirming it
+  // actually answers from the production network).
   // ---------------------------------------------------------------------
-  const ICE_SERVERS = [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:openrelay.metered.ca:80" },
-    { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
-    { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
-    { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
-  ];
+  const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
 
   // ---------------------------------------------------------------------
   // Incoming call alert — the in-page popup, desktop notification, and
