@@ -16,11 +16,9 @@
   const agentPickerList = $("agentPickerList");
 
   const stageIdle = $("stageIdle");
-  const stageIncoming = $("stageIncoming");
   const stageActive = $("stageActive");
   const stageOutgoing = $("stageOutgoing");
 
-  const incomingNumberEl = $("incomingNumber");
   const activeNumberEl = $("activeNumber");
   const outgoingNumberEl = $("outgoingNumber");
   const callTimerEl = $("callTimer");
@@ -30,8 +28,6 @@
   const popupBtnAccept = $("popupBtnAccept");
   const popupBtnReject = $("popupBtnReject");
 
-  const btnAccept = $("btnAccept");
-  const btnReject = $("btnReject");
   const btnHangup = $("btnHangup");
   const btnMute = $("btnMute");
   const btnHold = $("btnHold");
@@ -255,7 +251,7 @@
     showSnippet("curl");
   }
 
-  const stages = { idle: stageIdle, incoming: stageIncoming, active: stageActive, outgoing: stageOutgoing };
+  const stages = { idle: stageIdle, active: stageActive, outgoing: stageOutgoing };
 
   function setStage(name) {
     Object.entries(stages).forEach(([key, el]) => {
@@ -1207,10 +1203,8 @@
   // title flash all get shown together and torn down together.
   // ---------------------------------------------------------------------
   function showIncomingCallAlert(peer) {
-    incomingNumberEl.textContent = peer;
     popupIncomingNumberEl.textContent = peer;
     incomingCallPopup.classList.remove("hidden");
-    setStage("incoming");
     startRingtone();
     startTitleFlash(peer);
     if (document.hidden) showIncomingCallNotification(peer);
@@ -1494,17 +1488,13 @@
           callId: currentCallId,
         });
 
-        // The inline stage-incoming panel and the floating popup both show
-        // an Accept/Reject pair for the same ringing call, so there are
-        // always two Accept buttons on screen at once. Without this guard,
-        // answer() only fires on the first click, but both buttons stay
-        // live until the "accepted" event comes back from the PBX - which
-        // can take a second or two - so the agent sees nothing happen and
-        // clicks Accept again, thinking the first click didn't register.
+        // Without this guard, answer() only fires on the first click, but
+        // the buttons stay live until the "accepted" event comes back from
+        // the PBX - which can take a second or two - so the agent sees
+        // nothing happen and clicks Accept again, thinking the first click
+        // didn't register.
         let answered = false;
         const setIncomingButtonsDisabled = (disabled) => {
-          btnAccept.disabled = disabled;
-          btnReject.disabled = disabled;
           popupBtnAccept.disabled = disabled;
           popupBtnReject.disabled = disabled;
         };
@@ -1530,8 +1520,6 @@
           handOffIncomingCall(session, peer, "declined");
         };
 
-        btnAccept.onclick = acceptCall;
-        btnReject.onclick = rejectCall;
         popupBtnAccept.onclick = acceptCall;
         popupBtnReject.onclick = rejectCall;
       }

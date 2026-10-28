@@ -160,12 +160,11 @@ button {
 .stage-idle-icon { font-size: 40px; margin-bottom: 10px; }
 .stage-idle h2 { color: var(--text); margin: 0 0 6px; }
 
-.stage-incoming, .stage-outgoing, .stage-active, .stage-idle {
+.stage-outgoing, .stage-active, .stage-idle {
   opacity: 0;
   transform: scale(0.96);
   transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out);
 }
-.stage-incoming.stage-visible,
 .stage-outgoing.stage-visible,
 .stage-active.stage-visible,
 .stage-idle.stage-visible {
@@ -173,7 +172,7 @@ button {
   transform: scale(1);
 }
 
-.stage-incoming, .stage-outgoing, .stage-active {
+.stage-outgoing, .stage-active {
   display: flex; flex-direction: column; align-items: center; gap: 8px; position: relative;
 }
 
@@ -724,7 +723,7 @@ button.primary:active:not(:disabled), button.secondary:active:not(:disabled) { t
   .dialpad button:active, .dtmf-pad button:active, .dialer-actions button:active {
     transform: none;
   }
-  .stage-incoming, .stage-outgoing, .stage-active, .stage-idle {
+  .stage-outgoing, .stage-active, .stage-idle {
     transform: none;
     transition: opacity 220ms ease;
   }
