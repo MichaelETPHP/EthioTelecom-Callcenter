@@ -16,6 +16,11 @@
     🔇 Tap anywhere to hear the caller
   </div>
 
+  <!-- Shown when answering/placing a call fails right away (mic permission
+       denied, no media device, etc.) - without this, a failed call just
+       silently resets to idle with no clue why. -->
+  <div class="call-error-banner hidden" id="callErrorBanner" role="alert"></div>
+
   <!-- Incoming call popup — fixed over the whole app so it shows no matter
        which nav tab (Phone/SMS/History/Developers) is currently open. -->
   <div class="incoming-call-popup hidden" id="incomingCallPopup" role="alertdialog" aria-live="assertive" aria-label="Incoming call">

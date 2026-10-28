@@ -44,6 +44,7 @@
   const btnAway = $("btnAway");
   const btnEnableAudio = $("btnEnableAudio");
   const audioBlockedBanner = $("audioBlockedBanner");
+  const callErrorBanner = $("callErrorBanner");
 
   const pinModal = $("pinModal");
   const pinModalCard = $("pinModalCard");
@@ -171,6 +172,54 @@
         }
       });
   }
+
+  // ---------------------------------------------------------------------
+  // Call failure banner — a call that couldn't connect (mic permission
+  // denied, no audio device, WebRTC setup error...) used to just silently
+  // reset to idle with zero indication of why. This surfaces the actual
+  // cause instead of leaving the agent staring at an empty screen.
+  // ---------------------------------------------------------------------
+  let callErrorHideTimer = null; // auto-dismiss timer (shows -> waits -> hides)
+  let callErrorFadeTimer = null; // display:none timer (waits for the fade-out transition, then unmounts)
+
+  function describeCallFailureCause(cause) {
+    const known = {
+      USER_DENIED_MEDIA_ACCESS: "Microphone access was denied. Check the browser's site permissions, then try again.",
+      WEBRTC_ERROR: "Couldn't set up the call's audio connection (WebRTC error).",
+      RTP_TIMEOUT: "No audio was received from the other side - the call was dropped.",
+      NO_ANSWER: "No answer.",
+      REJECTED: "Call was rejected.",
+      CANCELED: "Call was canceled.",
+      BUSY: "The line was busy.",
+      NOT_FOUND: "That number wasn't found.",
+      ADDRESS_INCOMPLETE: "That number looks incomplete.",
+      REQUEST_TIMEOUT: "The request timed out.",
+    };
+    if (known[cause]) return known[cause];
+    if (cause === "failed" || cause === "disconnected") return "The call's audio connection dropped (network issue).";
+    return cause ? `Call failed (${cause}).` : "Call failed for an unknown reason.";
+  }
+
+  function showCallError(message) {
+    if (!callErrorBanner) return;
+    clearTimeout(callErrorHideTimer);
+    clearTimeout(callErrorFadeTimer); // cancel any pending unmount from a previous hideCallError()
+    callErrorBanner.textContent = `⚠ ${message} (tap to dismiss)`;
+    callErrorBanner.classList.remove("hidden");
+    void callErrorBanner.offsetWidth;
+    requestAnimationFrame(() => callErrorBanner.classList.add("visible"));
+    callErrorHideTimer = setTimeout(hideCallError, 10000);
+  }
+
+  function hideCallError() {
+    if (!callErrorBanner) return;
+    clearTimeout(callErrorHideTimer);
+    clearTimeout(callErrorFadeTimer);
+    callErrorBanner.classList.remove("visible");
+    callErrorFadeTimer = setTimeout(() => callErrorBanner.classList.add("hidden"), 220);
+  }
+
+  if (callErrorBanner) callErrorBanner.addEventListener("click", hideCallError);
 
   // Any interaction anywhere on the page retries blocked remote audio -
   // this is the recovery path for a call placed via autocall=1 with no
@@ -1270,6 +1319,7 @@
       clearHuntTimer();
       stopRingtone();
       hideIncomingCallAlert();
+      hideCallError();
       tryPlayRemoteAudio();
       setStage("active");
       activeNumberEl.textContent = peer;
@@ -1297,6 +1347,13 @@
       const status = `${direction === "inbound" ? "missed" : "failed"} (${cause})`;
       logCall(direction, peer, status, elapsed);
       postToParentFrame("failed", { direction, phone: toLocalPhoneFormat(peer), callId: currentCallId, status });
+      // Outbound failures are always worth surfacing - the agent is
+      // actively waiting on them. Inbound ones only get a banner if the
+      // agent actually tried to answer; a call that rang out unanswered,
+      // or that got declined/handed off, is normal and shouldn't alarm.
+      if (direction === "outbound" || session._answerAttempted) {
+        showCallError(direction === "inbound" ? `Couldn't answer the call: ${describeCallFailureCause(cause)}` : describeCallFailureCause(cause));
+      }
       resetToIdle();
     });
 
@@ -1539,10 +1596,22 @@
           stopRingtone();
           hideIncomingCallAlert();
           setCallPhoneUrlParam(peer);
-          session.answer({
-            mediaConstraints: { audio: true, video: false },
-            pcConfig: { iceServers: ICE_SERVERS },
-          });
+          hideCallError();
+          // A thrown error here (e.g. getUserMedia rejecting synchronously)
+          // used to leave the popup closed with nothing else happening -
+          // looked exactly like a dead button. Now it shows why, instead
+          // of failing silently, and still cleans the UI back to idle.
+          session._answerAttempted = true;
+          try {
+            session.answer({
+              mediaConstraints: { audio: true, video: false },
+              pcConfig: { iceServers: ICE_SERVERS },
+            });
+          } catch (err) {
+            console.error("[call] session.answer() threw", err);
+            showCallError(`Couldn't answer the call: ${err && err.message ? err.message : "unknown error"}`);
+            resetToIdle();
+          }
         };
         const rejectCall = () => {
           if (answered) return;
@@ -1566,10 +1635,18 @@
     if (!target) return;
     if (currentSession) return;
 
-    const session = ua.call(target, {
-      mediaConstraints: { audio: true, video: false },
-      pcConfig: { iceServers: ICE_SERVERS },
-    });
+    hideCallError();
+    let session;
+    try {
+      session = ua.call(target, {
+        mediaConstraints: { audio: true, video: false },
+        pcConfig: { iceServers: ICE_SERVERS },
+      });
+    } catch (err) {
+      console.error("[call] ua.call() threw", err);
+      showCallError(`Couldn't place the call: ${err && err.message ? err.message : "unknown error"}`);
+      return;
+    }
 
     outgoingNumberEl.textContent = target;
     setStage("outgoing");

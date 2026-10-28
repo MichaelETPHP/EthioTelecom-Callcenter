@@ -235,6 +235,30 @@ button {
   50% { opacity: 0.75; }
 }
 
+/* Call failure banner — a call that didn't connect (mic permission
+   denied, no device, registration lost, etc.) shouldn't just vanish
+   silently; this says why. Click to dismiss early. */
+.call-error-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1100;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  background: var(--red);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-100%);
+  transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out);
+}
+.call-error-banner.hidden { display: none !important; }
+.call-error-banner.visible { opacity: 1; transform: translateY(0); }
+
 /* Incoming call popup — overlays the entire app regardless of active tab */
 .incoming-call-popup {
   position: fixed;
