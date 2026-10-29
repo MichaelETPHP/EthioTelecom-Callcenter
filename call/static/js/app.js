@@ -25,6 +25,7 @@
 
   const incomingCallPopup = $("incomingCallPopup");
   const popupIncomingNumberEl = $("popupIncomingNumber");
+  const popupCallStatus = $("popupCallStatus");
   const popupBtnAccept = $("popupBtnAccept");
   const popupBtnReject = $("popupBtnReject");
 
@@ -1250,21 +1251,40 @@
   // restricted-cone) NAT. On a symmetric NAT - common on some mobile
   // carriers and office networks - STUN candidates get offered but never
   // actually connect, which can cause a call that briefly connects to then
-  // drop. A TURN relay is the standard fix for that - BUT answer()/call()
-  // wait for ICE gathering to finish before the SDP is actually sent, so
-  // an unreachable ICE server doesn't just degrade quality, it can stall
-  // pickup entirely (confirmed: the free Open Relay TURN host timed out
-  // from this network, which is worse than the problem it was meant to
-  // fix - don't add a TURN server here again without first confirming it
-  // actually answers from the production network).
+  // drop. The backend includes our TURN relay when configured. JsSIP waits
+  // for ICE gathering before sending SDP; boundIceGathering caps that wait
+  // after the first candidate so an unreachable server cannot stall pickup.
   // ---------------------------------------------------------------------
-  const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
+  let iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
+
+  function boundIceGathering(session) {
+    let timer = null;
+    const clear = () => {
+      clearTimeout(timer);
+      timer = null;
+    };
+    // JsSIP waits for ALL ICE servers before sending the SIP answer. Once
+    // we have a candidate, cap that wait so a blocked STUN/TURN endpoint
+    // cannot leave Answer stuck until the caller/PBX cancels the call.
+    session.on("icecandidate", ({ ready }) => {
+      if (timer !== null) return;
+      timer = setTimeout(() => {
+        if (!session.isEnded()) ready();
+      }, 5000);
+    });
+    session.on("sdp", ({ originator }) => {
+      if (originator === "local") clear();
+    });
+    session.on("failed", clear);
+    session.on("ended", clear);
+  }
 
   // ---------------------------------------------------------------------
   // Incoming call alert — the in-page popup, desktop notification, and
   // title flash all get shown together and torn down together.
   // ---------------------------------------------------------------------
   function showIncomingCallAlert(peer) {
+    popupCallStatus.textContent = "Incoming call";
     popupIncomingNumberEl.textContent = peer;
     incomingCallPopup.classList.remove("hidden");
     startRingtone();
@@ -1294,6 +1314,7 @@
     sessionDirection = direction;
     sessionPeer = peer;
     lastIceIssue = null;
+    boundIceGathering(session);
 
     session.on("peerconnection", (data) => {
       const pc = data.peerconnection;
@@ -1517,6 +1538,7 @@
     const query = agentId ? `?agent=${encodeURIComponent(agentId)}` : "";
     const res = await fetch(`api/config${query}`);
     const cfg = await res.json();
+    iceServers = cfg.iceServers || [{ urls: "stun:stun.l.google.com:19302" }];
 
     serverLabelEl.textContent = cfg.server;
     if (smsSenderLabelEl) smsSenderLabelEl.textContent = cfg.smsSenderLabel;
@@ -1587,6 +1609,8 @@
           popupBtnReject.disabled = disabled;
         };
         setIncomingButtonsDisabled(false);
+        popupBtnAccept.textContent = "✓";
+        popupBtnAccept.title = "Answer";
 
         const acceptCall = () => {
           if (answered) return;
@@ -1594,7 +1618,11 @@
           setIncomingButtonsDisabled(true);
           clearHuntTimer();
           stopRingtone();
-          hideIncomingCallAlert();
+          stopTitleFlash();
+          closeIncomingCallNotification();
+          popupBtnAccept.textContent = "…";
+          popupBtnAccept.title = "Answering…";
+          popupCallStatus.textContent = "Answering… Allow microphone access if prompted.";
           setCallPhoneUrlParam(peer);
           hideCallError();
           // A thrown error here (e.g. getUserMedia rejecting synchronously)
@@ -1605,10 +1633,13 @@
           try {
             session.answer({
               mediaConstraints: { audio: true, video: false },
-              pcConfig: { iceServers: ICE_SERVERS },
+              pcConfig: { iceServers },
             });
           } catch (err) {
             console.error("[call] session.answer() threw", err);
+            // Release the SIP session as well as the UI, otherwise the
+            // caller keeps ringing and the next call finds a busy seat.
+            if (!session.isEnded()) session.terminate();
             showCallError(`Couldn't answer the call: ${err && err.message ? err.message : "unknown error"}`);
             resetToIdle();
           }
@@ -1640,7 +1671,7 @@
     try {
       session = ua.call(target, {
         mediaConstraints: { audio: true, video: false },
-        pcConfig: { iceServers: ICE_SERVERS },
+        pcConfig: { iceServers },
       });
     } catch (err) {
       console.error("[call] ua.call() threw", err);

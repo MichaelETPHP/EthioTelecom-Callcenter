@@ -2,6 +2,7 @@ import json
 import sqlite3
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from flask import Flask, g, jsonify, render_template, request
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -96,6 +97,7 @@ init_db()
 def index():
     return render_template(
         "index.html",
+        app_js_version=(Path(app.static_folder) / "js" / "app.js").stat().st_mtime_ns,
         company_name=config.COMPANY_NAME,
         public_sms_api_url=config.PUBLIC_SMS_API_URL,
         public_sms_mobile_url=config.PUBLIC_SMS_MOBILE_URL,
@@ -144,6 +146,7 @@ def api_config():
     return jsonify(
         {
             "wsUrl": config.SIP_WS_URL,
+            "iceServers": config.ICE_SERVERS,
             "sipUri": f"sip:{username}@{config.SIP_DOMAIN}",
             "sipDomain": config.SIP_DOMAIN,
             "authUser": username,

@@ -27,7 +27,7 @@
     <div class="incoming-call-card">
       <div class="pulse-ring"></div>
       <div class="caller-avatar">📞</div>
-      <div class="caller-label">Incoming call</div>
+      <div class="caller-label" id="popupCallStatus" role="status">Incoming call</div>
       <div class="caller-number" id="popupIncomingNumber">—</div>
       <div class="call-actions">
         <button class="call-btn reject" id="popupBtnReject" title="Decline">✕</button>
@@ -498,6 +498,6 @@ SMS_API_PASSWORD=YOUR_GENERATED_PASSWORD</code></pre>
   <audio id="remoteAudio" autoplay></audio>
 
   <script src="{{ url_for('static', filename='js/vendor/jssip.bundle.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js', v=app_js_version) }}"></script>
 </body>
 </html>

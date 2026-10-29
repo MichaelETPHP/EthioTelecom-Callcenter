@@ -12,6 +12,21 @@ SIP_USERNAME = os.environ.get("SIP_USERNAME", "")
 SIP_PASSWORD = os.environ.get("SIP_PASSWORD", "")
 SIP_DISPLAY_NAME = os.environ.get("SIP_DISPLAY_NAME", "Gebeta Technology Trading plc")
 
+# The browser needs public relay addresses, not the Docker service hostname.
+ICE_SERVERS = [{"urls": "stun:stun.l.google.com:19302"}]
+_turn_host = os.environ.get("TURN_EXTERNAL_IP") or os.environ.get("TURN_REALM") or "ethiotelecom.zmichael.click"
+_turn_port = os.environ.get("TURN_PORT") or "3478"
+_turn_password = os.environ.get("TURN_PASSWORD", "")
+if _turn_password:
+    ICE_SERVERS.append({
+        "urls": [
+            f"turn:{_turn_host}:{_turn_port}?transport=udp",
+            f"turn:{_turn_host}:{_turn_port}?transport=tcp",
+        ],
+        "username": os.environ.get("TURN_USER") or "callcenter",
+        "credential": _turn_password,
+    })
+
 COMPANY_NAME = os.environ.get("COMPANY_NAME", "Gebeta Technology Trading plc")
 
 # --- Call hunting across multiple agent seats ------------------------------
